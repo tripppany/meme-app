@@ -1,0 +1,6 @@
+{
+  "name": "Meme Generator",
+  "description": "Telegram Mini App for generating, editing, moderating, and sharing memes in chat communities.",
+  "permissions": [],
+  "capabilities": []
+}
