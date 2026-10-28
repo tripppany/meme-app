@@ -24,25 +24,7 @@ import { GalleryView } from './components/GalleryView';
 import { AdminView } from './components/AdminView';
 import { TemplateModal } from './components/TemplateModal';
 import { Toast, ToastMessage } from './components/Toast';
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        ready: () => void;
-        expand: () => void;
-        initDataUnsafe?: {
-          user?: {
-            id: number;
-            first_name?: string;
-            last_name?: string;
-            username?: string;
-          };
-        };
-      };
-    };
-  }
-}
+import { initTelegram, getTelegramWebApp, telegramHaptic } from './services/telegram';
 
 export const App: React.FC = () => {
   // Navigation tab
@@ -152,19 +134,35 @@ export const App: React.FC = () => {
 
   // Initialize Telegram WebApp & user access
   useEffect(() => {
-    const tg = window.Telegram?.WebApp;
-    if (tg) {
-      try {
-        tg.ready();
-        tg.expand();
-        if (tg.initDataUnsafe?.user) {
-          setUser(tg.initDataUnsafe.user);
-        }
-      } catch (e) {
-        console.warn('Telegram WebApp initialization error:', e);
-      }
+    const tgUser = initTelegram();
+    if (tgUser) {
+      setUser(tgUser);
     }
   }, []);
+
+  // Telegram Native BackButton integration
+  useEffect(() => {
+    const tg = getTelegramWebApp();
+    if (!tg?.BackButton) return;
+
+    if (currentTab !== 'home' || isTemplateModalOpen) {
+      tg.BackButton.show();
+      const handleBack = () => {
+        telegramHaptic('light');
+        if (isTemplateModalOpen) {
+          setIsTemplateModalOpen(false);
+        } else if (currentTab !== 'home') {
+          setCurrentTab('home');
+        }
+      };
+      tg.BackButton.onClick(handleBack);
+      return () => {
+        tg.BackButton?.offClick(handleBack);
+      };
+    } else {
+      tg.BackButton.hide();
+    }
+  }, [currentTab, isTemplateModalOpen]);
 
   // Check admin rights
   useEffect(() => {
@@ -181,6 +179,7 @@ export const App: React.FC = () => {
 
   // Secret admin toggle
   const handleToggleAdmin = () => {
+    telegramHaptic('medium');
     const nextState = !isAdmin;
     setIsAdmin(nextState);
     setStoredAdminFlag(nextState);

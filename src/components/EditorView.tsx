@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { CanvasLayer, TextLayer, ImageLayer } from '../types/meme';
+import { telegramHaptic } from '../services/telegram';
 
 interface EditorViewProps {
   templateUrl: string;
@@ -219,6 +220,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       color: '#ffffff',
       strokeColor: '#000000',
     };
+    telegramHaptic('light');
     setLayers((prev) => [...prev, newTextLayer]);
     setSelectedLayerIndex(layers.length);
   };
@@ -245,6 +247,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           width: 120,
           height: 120,
         };
+        telegramHaptic('light');
         setLayers((prev) => [...prev, newImageLayer]);
         setSelectedLayerIndex(layers.length);
       };
@@ -257,6 +260,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   // Delete selected layer
   const handleDeleteLayer = () => {
     if (selectedLayerIndex < 0 || selectedLayerIndex >= layers.length) return;
+    telegramHaptic('medium');
     setLayers((prev) => prev.filter((_, idx) => idx !== selectedLayerIndex));
     setSelectedLayerIndex(-1);
   };
@@ -303,6 +307,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       const cleanCanvas = canvasRef.current;
       if (!cleanCanvas) return;
       const dataUrl = cleanCanvas.toDataURL('image/png');
+      telegramHaptic('success');
       onSubmitForReview(dataUrl);
       setSelectedLayerIndex(prevSelected);
     });
@@ -324,6 +329,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       a.href = dataUrl;
       a.download = `meme_${Date.now()}.png`;
       a.click();
+      telegramHaptic('success');
       setSelectedLayerIndex(prevSelected);
     });
   };

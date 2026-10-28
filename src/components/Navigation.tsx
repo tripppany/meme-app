@@ -1,4 +1,5 @@
 import React from 'react';
+import { telegramHaptic } from '../services/telegram';
 
 export type TabType = 'home' | 'editor' | 'gallery' | 'admin';
 
@@ -15,11 +16,16 @@ export const Navigation: React.FC<NavigationProps> = ({
   isAdmin,
   pendingCount,
 }) => {
+  const handleTabClick = (tab: TabType) => {
+    telegramHaptic('light');
+    onTabChange(tab);
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-800/95 backdrop-blur-md border-t border-slate-700 px-4 py-2">
       <div className="max-w-lg mx-auto flex justify-around items-center">
         <button
-          onClick={() => onTabChange('home')}
+          onClick={() => handleTabClick('home')}
           className={`flex flex-col items-center gap-1 transition ${
             currentTab === 'home' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'
           }`}
@@ -29,7 +35,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </button>
 
         <button
-          onClick={() => onTabChange('editor')}
+          onClick={() => handleTabClick('editor')}
           className={`flex flex-col items-center gap-1 transition ${
             currentTab === 'editor' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'
           }`}
@@ -39,7 +45,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </button>
 
         <button
-          onClick={() => onTabChange('gallery')}
+          onClick={() => handleTabClick('gallery')}
           className={`flex flex-col items-center gap-1 transition ${
             currentTab === 'gallery' ? 'text-indigo-400 font-bold' : 'text-slate-400 hover:text-white'
           }`}
@@ -50,7 +56,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
         {isAdmin && (
           <button
-            onClick={() => onTabChange('admin')}
+            onClick={() => handleTabClick('admin')}
             className={`flex flex-col items-center gap-1 transition relative ${
               currentTab === 'admin' ? 'text-amber-400 font-bold' : 'text-amber-500/80 hover:text-amber-400'
             }`}

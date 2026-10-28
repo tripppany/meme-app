@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { MemeItem, MemeTemplate } from '../types/meme';
 import { PRIMARY_ADMIN_IDS } from '../constants/templates';
+import { ConfirmModal } from './ConfirmModal';
+import { telegramHaptic } from '../services/telegram';
 
 interface AdminViewProps {
   pendingMemes: MemeItem[];
@@ -52,6 +54,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
+  // Confirmation modal state (non-blocking for Telegram)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDanger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Sync section state
   const [syncCodeInput, setSyncCodeInput] = useState('');
   const [showSyncDetails, setShowSyncDetails] = useState(false);
@@ -80,11 +92,14 @@ export const AdminView: React.FC<AdminViewProps> = ({
     const finalImage = uploadMode === 'url' ? templateUrlInput.trim() : templateImage;
 
     if (!title || !finalImage) {
-      alert('Укажите название и выберите изображение или укажите URL шаблона.');
+      setSyncFeedback({ type: 'error', text: 'Укажите название и выберите изображение или URL' });
+      telegramHaptic('error');
+      setTimeout(() => setSyncFeedback(null), 3000);
       return;
     }
 
     onAddTemplate(title, finalImage);
+    telegramHaptic('success');
     setTemplateTitle('');
     setTemplateImage(null);
     setTemplateUrlInput('');
@@ -92,6 +107,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   };
 
   const handleStartRename = (t: MemeTemplate) => {
+    telegramHaptic('light');
     setEditingTemplateId(t.id);
     setEditingTitle(t.title);
   };
@@ -99,20 +115,26 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const handleSaveRename = (id: string) => {
     const trimmed = editingTitle.trim();
     if (!trimmed) {
-      alert('Название шаблона не может быть пустым');
+      setSyncFeedback({ type: 'error', text: 'Название шаблона не может быть пустым' });
+      telegramHaptic('error');
+      setTimeout(() => setSyncFeedback(null), 3000);
       return;
     }
     onRenameTemplate(id, trimmed);
+    telegramHaptic('success');
     setEditingTemplateId(null);
   };
 
   const handleAddAdmin = () => {
     const val = parseInt(newAdminIdInput.trim());
     if (!val || isNaN(val)) {
-      alert('Введите корректный числовой Telegram ID');
+      setSyncFeedback({ type: 'error', text: 'Введите корректный числовой Telegram ID' });
+      telegramHaptic('error');
+      setTimeout(() => setSyncFeedback(null), 3000);
       return;
     }
     onAddAdminId(val);
+    telegramHaptic('success');
     setNewAdminIdInput('');
   };
 
@@ -322,12 +344,22 @@ export const AdminView: React.FC<AdminViewProps> = ({
           <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400">
             <span>Список шаблонов (можно удалить любой):</span>
             <button
+              type="button"
               onClick={() => {
-                if (confirm('Сбросить шаблоны к стандартному набору?')) {
-                  onResetTemplates();
-                }
+                setConfirmModal({
+                  isOpen: true,
+                  title: 'Сброс шаблонов',
+                  message: 'Восстановить исходный набор базовых шаблонов?',
+                  confirmText: 'Восстановить',
+                  isDanger: false,
+                  onConfirm: () => {
+                    onResetTemplates();
+                    telegramHaptic('success');
+                    setConfirmModal(null);
+                  },
+                });
               }}
-              className="text-[10px] text-indigo-400 hover:text-indigo-300 underline"
+              className="text-[10px] text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
             >
               Восстановить базовые
             </button>
@@ -410,9 +442,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            if (confirm(`Удалить шаблон "${t.title}" со всех устройств?`)) {
-                              onDeleteTemplate(t.id);
-                            }
+                            setConfirmModal({
+                              isOpen: true,
+                              title: 'Удаление шаблона',
+                              message: `Удалить шаблон "${t.title}" со всех устройств?`,
+                              confirmText: 'Удалить',
+                              isDanger: true,
+                              onConfirm: () => {
+                                onDeleteTemplate(t.id);
+                                telegramHaptic('medium');
+                                setConfirmModal(null);
+                              },
+                            });
                           }}
                           className="text-xs text-rose-400 hover:text-rose-300 p-2 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
                           title="Удалить шаблон со всех устройств"
@@ -766,6 +807,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
           </div>
         )}
       </div>
+      {/* Non-blocking Telegram-compatible Confirm Modal */}
+      <ConfirmModal
+        isOpen={Boolean(confirmModal?.isOpen)}
+        title={confirmModal?.title || ''}
+        message={confirmModal?.message || ''}
+        confirmText={confirmModal?.confirmText}
+        isDanger={confirmModal?.isDanger}
+        onConfirm={() => confirmModal?.onConfirm()}
+        onCancel={() => setConfirmModal(null)}
+      />
     </section>
   );
 };
