@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ураа мемы</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --text-color: #ffffff;
+            --hint-color: #b0b0b0;
+            --button-color: #8b5cf6;
+            --button-text-color: #ffffff;
+            --secondary-bg: #2a2a2a;
+            --border-color: #383838;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h2 {
+            margin: 5px 0;
+            font-size: 20px;
+            text-align: center;
+            color: var(--text-color);
+        }
+
+        .tabs {
+            display: flex;
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 10px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--hint-color);
+        }
+
+        .tab.active {
+            background: var(--button-color);
+            color: var(--button-text-color);
+        }
+
+        .section {
+            display: none;
+            width: 100%;
+            max-width: 500px;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .section.active {
+            display: flex;
+        }
+
+        .templates-grid, .gallery-grid, .moderation-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            width: 100%;
+            padding-bottom: 20px;
+        }
+
+        .template-card, .gallery-item, .mod-card {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            text-align: center;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        .template-card img, .gallery-item img, .mod-card img {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 340px;
+            aspect-ratio: 1 / 1;
+            background: #000000;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .controls {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 30px;
+        }
+
+        button, label.btn-file {
+            background-color: var(--button-color);
+            color: var(--button-text-color);
+            border: none;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            display: inline-block;
+        }
+
+        button:active, label.btn-file:active {
+            opacity: 0.8;
+        }
+
+        input[type="text"], input[type="file"], input[type="number"] {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-color);
+            font-size: 14px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        input::placeholder {
+            color: var(--hint-color);
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .admin-badge {
+            font-size: 12px;
+            color: #f59e0b;
+            margin-bottom: 8px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            width: 100%;
+            background: var(--surface-color);
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+        }
+        
+        .slider-container input {
+            flex: 1;
+            accent-color: var(--button-color);
+        }
+    </style>
+</head>
+<body>
+
+    <h2 id="app-title">🎨 ураа мемы</h2>
+    <div id="user-info" class="admin-badge"></div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('create')">Конструктор</div>
+        <div class="tab" onclick="switchTab('templates')">Шаблоны</div>
+        <div class="tab" onclick="switchTab('gallery')">Галерея</div>
+        <div class="tab" id="tab-admin" style="display:none;" onclick="switchTab('admin')">🛡 Админ</div>
+    </div>
+
+    <!-- Конструктор -->
+    <div id="section-create" class="section active">
+        <div class="canvas-container">
+            <canvas id="memeCanvas" width="500" height="500"></canvas>
+        </div>
+
+        <div class="controls">
+            <div class="row">
+                <button style="flex:1;" onclick="addText()">+ Текст</button>
+                <label style="flex:1;" class="btn-file">
+                    + Картинку <input type="file" id="imageLoader" accept="image/*" style="display:none;" onchange="addImage(this)">
+                </label>
+            </div>
+            <input type="text" id="elementText" placeholder="Текст выбранного элемента..." oninput="updateActiveText(this.value)">
+            
+            <div class="slider-container" id="sizeContainer" style="display:none;">
+                <span>Размер / Масштаб:</span>
+                <input type="range" id="sizeRange" min="10" max="150" value="35" oninput="updateActiveSize(this.value)">
+            </div>
+
+            <div class="row">
+                <button style="background: #ef4444; flex:1;" onclick="deleteActiveElement()">Удалить</button>
+                <button style="background: #10b981; flex:1;" onclick="sendMeme()">Отправить</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Шаблоны -->
+    <div id="section-templates" class="section">
+        <div class="templates-grid" id="templatesGrid"></div>
+    </div>
+
+    <!-- Галерея -->
+    <div id="section-gallery" class="section">
+        <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+
+    <!-- Админка -->
+    <div id="section-admin" class="section">
+        <div class="controls">
+            <h3 style="margin-bottom:5px;">Управление шаблонами</h3>
+            <input type="text" id="newTemplateName" placeholder="Название шаблона">
+            <label class="btn-file">
+                Загрузить шаблон в базу <input type="file" id="templateLoader" accept="image/*" style="display:none;" onchange="uploadNewTemplate(this)">
+            </label>
+
+            <h3 style="margin-top:15px; margin-bottom:5px;">Назначение администраторов</h3>
+            <input type="number" id="newAdminId" placeholder="Введите Telegram ID">
+            <button onclick="addNewAdmin()">Добавить администратора</button>
+
+            <h3 style="margin-top:15px; margin-bottom:5px;">Модерация мемов</h3>
+            <div class="moderation-list" id="moderationList"></div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        try { tg.expand(); } catch(e) {}
+
+        const SUPER_ADMIN_ID = 502413224;
+        let currentUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) ? tg.initDataUnsafe.user : { id: SUPER_ADMIN_ID, first_name: "Админ" };
+        
+        let admins = JSON.parse(localStorage.getItem('meme_admins')) || [SUPER_ADMIN_ID];
+
+        function isAdmin(userId) {
+            return admins.includes(Number(userId));
+        }
+
+        if (isAdmin(currentUser.id)) {
+            document.getElementById('tab-admin').style.display = 'block';
+            document.getElementById('user-info').innerText = `👤 ${currentUser.first_name} (Администратор)`;
+        } else {
+            document.getElementById('user-info').innerText = `👤 ${currentUser.first_name}`;
+        }
+
+        function addNewAdmin() {
+            const input = document.getElementById('newAdminId');
+            const newId = Number(input.value.trim());
+            if (!newId) return alert('Введите корректный ID');
+            if (admins.includes(newId)) return alert('Этот пользователь уже администратор');
+
+            admins.push(newId);
+            localStorage.setItem('meme_admins', JSON.stringify(admins));
+            input.value = '';
+            alert(`Пользователь ${newId} назначен администратором!`);
+        }
+
+        let templates = JSON.parse(localStorage.getItem('meme_templates')) || [
+            { name: "Кот в очках", url: "https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=500&auto=format&fit=crop&q=60" },
+            { name: "Удивленный пес", url: "https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500&auto=format&fit=crop&q=60" }
+        ];
+
+        let pendingMemes = JSON.parse(localStorage.getItem('meme_pending')) || [];
+        let publishedMemes = JSON.parse(localStorage.getItem('meme_published')) || [];
+
+        const canvas = document.getElementById('memeCanvas');
+        const ctx = canvas.getContext('2d');
+        let elements = [];
+        let selectedElementIndex = null;
+        let isDragging = false;
+        let startX, startY;
+
+        let baseImage = new Image();
+        baseImage.crossOrigin = "anonymous";
+        baseImage.onload = () => redrawCanvas();
+        baseImage.onerror = () => {
+            // Фолбек если картинка не загрузилась
+            baseImage.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+        };
+        baseImage.src = templates[0].url;
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            
+            if (tabName === 'create') {
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('section-create').classList.add('active');
+            } else if (tabName === 'templates') {
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('section-templates').classList.add('active');
+                renderTemplates();
+            } else if (tabName === 'gallery') {
+                document.querySelectorAll('.tab')[2].classList.add('active');
+                document.getElementById('section-gallery').classList.add('active');
+                renderGallery();
+            } else if (tabName === 'admin' && isAdmin(currentUser.id)) {
+                document.querySelectorAll('.tab')[3].classList.add('active');
+                document.getElementById('section-admin').classList.add('active');
+                renderModeration();
+            }
+            redrawCanvas();
+        }
+
+        function renderTemplates() {
+            const grid = document.getElementById('templatesGrid');
+            grid.innerHTML = '';
+            templates.forEach((t) => {
+                grid.innerHTML += `
+                    <div class="template-card">
+                        <img src="${t.url}" crossorigin="anonymous" onclick="selectTemplate('${t.url}')">
+                        <div style="font-size:12px; margin-top:4px;">${t.name}</div>
+                    </div>
+                `;
+            });
+        }
+
+        function selectTemplate(url) {
+            baseImage.src = url;
+            switchTab('create');
+        }
+
+        function uploadNewTemplate(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const name = document.getElementById('newTemplateName').value || "Шаблон";
+                    templates.push({ name: name, url: e.target.result });
+                    localStorage.setItem('meme_templates', JSON.stringify(templates));
+                    document.getElementById('newTemplateName').value = '';
+                    alert('Шаблон добавлен!');
+                    renderTemplates();
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function redrawCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (baseImage && baseImage.complete) {
+                try {
+                    ctx.drawImage(baseImage, 0, 0, canvas.width, canvas.height);
+                } catch(e) {}
+            }
+
+            elements.forEach((el, index) => {
+                ctx.save();
+                ctx.translate(el.x, el.y);
+                ctx.rotate(el.rotation || 0);
+
+                if (el.type === 'text') {
+                    ctx.font = `${el.size || 35}px sans-serif`;
+                    ctx.fillStyle = el.color || '#ffffff';
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 3;
+                    ctx.strokeText(el.text, 0, 0);
+                    ctx.fillText(el.text, 0, 0);
+                } else if (el.type === 'image' && el.imgObj && el.imgObj.complete) {
+                    ctx.drawImage(el.imgObj, -el.width/2, -el.height/2, el.width, el.height);
+                }
+
+                if (index === selectedElementIndex) {
+                    ctx.strokeStyle = '#8b5cf6';
+                    ctx.lineWidth = 2;
+                    if (el.type === 'text') {
+                        const metrics = ctx.measureText(el.text);
+                        ctx.strokeRect(-4, -el.size, metrics.width + 8, el.size + 8);
+                    } else {
+                        ctx.strokeRect(-el.width/2 - 4, -el.height/2 - 4, el.width + 8, el.height + 8);
+                    }
+                }
+                ctx.restore();
+            });
+        }
+
+        function addText() {
+            elements.push({ type: 'text', text: 'Ваш текст', x: 100, y: 100, size: 35, color: '#ffffff' });
+            selectElement(elements.length - 1);
+            redrawCanvas();
+        }
+
+        function addImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        let w = 150;
+                        let h = (img.height / img.width) * w;
+                        elements.push({ type: 'image', imgObj: img, x: 150, y: 150, width: w, height: h });
+                        selectElement(elements.length - 1);
+                        redrawCanvas();
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        function selectElement(index) {
+            selectedElementIndex = index;
+            const el = elements[index];
+            const sizeContainer = document.getElementById('sizeContainer');
+            sizeContainer.style.display = 'flex';
+            
+            if (el.type === 'text') {
+                document.getElementById('elementText').style.display = 'block';
+                document.getElementById('elementText').value = el.text;
+                document.getElementById('sizeRange').value = el.size;
+            } else {
+                document.getElementById('elementText').style.display = 'none';
+                document.getElementById('sizeRange').value = el.width;
+            }
+        }
+
+        function updateActiveText(val) {
+            if (selectedElementIndex !== null && elements[selectedElementIndex].type === 'text') {
+                elements[selectedElementIndex].text = val;
+                redrawCanvas();
+            }
+        }
+
+        function updateActiveSize(val) {
+            if (selectedElementIndex !== null) {
+                const el = elements[selectedElementIndex];
+                if (el.type === 'text') {
+                    el.size = Number(val);
+                } else {
+                    let ratio = el.height / el.width;
+                    el.width = Number(val);
+                    el.height = el.width * ratio;
+                }
+                redrawCanvas();
+            }
+        }
+
+        function deleteActiveElement() {
+            if (selectedElementIndex !== null) {
+                elements.splice(selectedElementIndex, 1);
+                selectedElementIndex = null;
+                document.getElementById('elementText').value = '';
+                document.getElementById('sizeContainer').style.display = 'none';
+                redrawCanvas();
+            }
+        }
+
+        function getPointerPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('touchstart', startDrag, {passive: false});
+
+        function startDrag(e) {
+            e.preventDefault();
+            const pos = getPointerPos(e);
+            selectedElementIndex = null;
+
+            for (let i = elements.length - 1; i >= 0; i--) {
+                const el = elements[i];
+                let hit = false;
+                if (el.type === 'text') {
+                    ctx.font = `${el.size || 35}px sans-serif`;
+                    const w = ctx.measureText(el.text).width;
+                    if (pos.x >= el.x && pos.x <= el.x + w && pos.y >= el.y - el.size && pos.y <= el.y) {
+                        hit = true;
+                    }
+                } else {
+                    if (pos.x >= el.x - el.width/2 && pos.x <= el.x + el.width/2 && pos.y >= el.y - el.height/2 && pos.y <= el.y + el.height/2) {
+                        hit = true;
+                    }
+                }
+                if (hit) {
+                    selectElement(i);
+                    isDragging = true;
+                    startX = pos.x - el.x;
+                    startY = pos.y - el.y;
+                    break;
+                }
+            }
+            if (selectedElementIndex === null) {
+                document.getElementById('sizeContainer').style.display = 'none';
+            }
+            redrawCanvas();
+        }
+
+        canvas.addEventListener('mousemove', drag);
+        canvas.addEventListener('touchmove', drag, {passive: false});
+
+        function drag(e) {
+            if (!isDragging || selectedElementIndex === null) return;
+            e.preventDefault();
+            const pos = getPointerPos(e);
+            elements[selectedElementIndex].x = pos.x - startX;
+            elements[selectedElementIndex].y = pos.y - startY;
+            redrawCanvas();
+        }
+
+        window.addEventListener('mouseup', stopDrag);
+        window.addEventListener('touchend', stopDrag);
+
+        function stopDrag() {
+            isDragging = false;
+        }
+
+        function sendMeme() {
+            selectedElementIndex = null;
+            document.getElementById('sizeContainer').style.display = 'none';
+            redrawCanvas();
+            try {
+                const dataUrl = canvas.toDataURL('image/png');
+                pendingMemes.push({
+                    id: Date.now(),
+                    url: dataUrl,
+                    user: currentUser.first_name,
+                    userId: currentUser.id
+                });
+                localStorage.setItem('meme_pending', JSON.stringify(pendingMemes));
+                alert('Мем успешно отправлен на модерацию!');
+                switchTab('gallery');
+            } catch(e) {
+                alert('Ошибка при создании мема. Попробуйте еще раз.');
+            }
+        }
+
+        function renderModeration() {
+            const list = document.getElementById('moderationList');
+            list.innerHTML = '';
+            if (pendingMemes.length === 0) {
+                list.innerHTML = '<div style="font-size:13px; color:var(--hint-color); text-align:center;">Нет мемов на проверке</div>';
+                return;
+            }
+            pendingMemes.forEach((m, idx) => {
+                list.innerHTML += `
+                    <div class="mod-card">
+                        <img src="${m.url}">
+                        <div style="font-size:12px; margin:4px 0;">Автор: ${m.user}</div>
+                        <a href="${m.url}" download="meme_${m.id}.png" style="font-size:12px; display:block; margin-bottom:4px; color:var(--button-color);">Скачать</a>
+                        <button style="background:#10b981; font-size:12px; padding:6px;" onclick="approveMeme(${idx}, false)">Опубликовать</button>
+                        <button style="background:#f59e0b; font-size:12px; padding:6px; margin-top:4px;" onclick="approveMeme(${idx}, true)">Анонимно</button>
+                        <button style="background:#ef4444; font-size:12px; padding:6px; margin-top:4px;" onclick="rejectMeme(${idx})">Удалить</button>
+                    </div>
+                `;
+            });
+        }
+
+        function approveMeme(index, isAnon) {
+            const meme = pendingMemes.splice(index, 1)[0];
+            meme.anonymous = isAnon;
+            publishedMemes.push(meme);
+            localStorage.setItem('meme_pending', JSON.stringify(pendingMemes));
+            localStorage.setItem('meme_published', JSON.stringify(publishedMemes));
+            renderModeration();
+            alert('Мем опубликован!');
+        }
+
+        function rejectMeme(index) {
+            pendingMemes.splice(index, 1);
+            localStorage.setItem('meme_pending', JSON.stringify(pendingMemes));
+            renderModeration();
+        }
+
+        function renderGallery() {
+            const grid = document.getElementById('galleryGrid');
+            grid.innerHTML = '';
+            
+            const allItems = [...publishedMemes];
+            if (allItems.length === 0) {
+                grid.innerHTML = '<div style="grid-column: span 2; font-size:13px; color:var(--hint-color); text-align:center;">Галерея пока пуста</div>';
+                return;
+            }
+
+            allItems.forEach((m, idx) => {
+                let authorText = m.anonymous ? "🎭 Анонимно" : `👤 ${m.user}`;
+                let revealBtn = (isAdmin(currentUser.id) && m.anonymous) ? `<button style="font-size:11px; padding:4px; margin-top:4px; background:#f59e0b;" onclick="revealAuthor(${idx})">Раскрыть автора</button>` : '';
+
+                grid.innerHTML += `
+                    <div class="gallery-item">
+                        <img src="${m.url}">
+                        <div id="author-${idx}" style="font-size:12px; margin-top:4px; font-weight:600;">${authorText}</div>
+                        ${revealBtn}
+                    </div>
+                `;
+            });
+        }
+
+        function revealAuthor(idx) {
+            publishedMemes[idx].anonymous = false;
+            localStorage.setItem('meme_published', JSON.stringify(publishedMemes));
+            renderGallery();
+        }
+    </script>
+</body>
+</html>
