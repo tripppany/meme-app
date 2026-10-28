@@ -1,25 +1,25 @@
 import { TelegramUser } from '../types/meme';
 
 export interface TelegramWebApp {
-  ready: () => void;
-  expand: () => void;
-  close: () => void;
+  ready?: () => void;
+  expand?: () => void;
+  close?: () => void;
   enableClosingConfirmation?: () => void;
   setHeaderColor?: (color: string) => void;
   setBackgroundColor?: (color: string) => void;
   showAlert?: (message: string, callback?: () => void) => void;
   showConfirm?: (message: string, callback?: (confirmed: boolean) => void) => void;
   HapticFeedback?: {
-    impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
-    notificationOccurred: (type: 'error' | 'success' | 'warning') => void;
-    selectionChanged: () => void;
+    impactOccurred?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+    notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
+    selectionChanged?: () => void;
   };
   BackButton?: {
-    isVisible: boolean;
-    show: () => void;
-    hide: () => void;
-    onClick: (cb: () => void) => void;
-    offClick: (cb: () => void) => void;
+    isVisible?: boolean;
+    show?: () => void;
+    hide?: () => void;
+    onClick?: (cb: () => void) => void;
+    offClick?: (cb: () => void) => void;
   };
   initDataUnsafe?: {
     user?: TelegramUser & {
@@ -43,21 +43,29 @@ export interface TelegramWebApp {
 declare global {
   interface Window {
     Telegram?: {
-      WebApp: TelegramWebApp;
+      WebApp?: TelegramWebApp;
     };
   }
 }
 
 export function getTelegramWebApp(): TelegramWebApp | null {
-  if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-    return window.Telegram.WebApp;
+  try {
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      return window.Telegram.WebApp;
+    }
+  } catch {
+    // ignore
   }
   return null;
 }
 
 export function isTelegramEnv(): boolean {
-  const tg = getTelegramWebApp();
-  return Boolean(tg && tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0);
+  try {
+    const tg = getTelegramWebApp();
+    return Boolean(tg && tg.initDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0);
+  } catch {
+    return false;
+  }
 }
 
 export function initTelegram(): TelegramUser | null {
@@ -65,11 +73,19 @@ export function initTelegram(): TelegramUser | null {
   if (!tg) return null;
 
   try {
-    tg.ready();
-    tg.expand();
+    tg.ready?.();
+    tg.expand?.();
     tg.enableClosingConfirmation?.();
-    tg.setHeaderColor?.('#1e293b');
-    tg.setBackgroundColor?.('#0f172a');
+    try {
+      tg.setHeaderColor?.('#1e293b');
+    } catch {
+      // not supported in older webapp
+    }
+    try {
+      tg.setBackgroundColor?.('#0f172a');
+    } catch {
+      // not supported in older webapp
+    }
     return tg.initDataUnsafe?.user || null;
   } catch (err) {
     console.warn('Telegram init error:', err);
@@ -82,13 +98,40 @@ export function telegramHaptic(type: 'light' | 'medium' | 'success' | 'error' = 
   if (!tg?.HapticFeedback) return;
   try {
     if (type === 'success' || type === 'error') {
-      tg.HapticFeedback.notificationOccurred(type);
+      tg.HapticFeedback.notificationOccurred?.(type);
     } else {
-      tg.HapticFeedback.impactOccurred(type);
+      tg.HapticFeedback.impactOccurred?.(type);
     }
   } catch {
     // Ignore if not supported
   }
+}
+
+export function setTelegramBackButton(visible: boolean, onClick?: () => void): () => void {
+  const tg = getTelegramWebApp();
+  if (!tg?.BackButton) return () => {};
+
+  try {
+    if (visible) {
+      tg.BackButton.show?.();
+      if (onClick && tg.BackButton.onClick) {
+        tg.BackButton.onClick(onClick);
+        return () => {
+          try {
+            tg.BackButton?.offClick?.(onClick);
+          } catch {
+            // ignore
+          }
+        };
+      }
+    } else {
+      tg.BackButton.hide?.();
+    }
+  } catch (e) {
+    console.warn('Telegram BackButton handling error:', e);
+  }
+
+  return () => {};
 }
 
 export function telegramAlert(message: string, callback?: () => void) {

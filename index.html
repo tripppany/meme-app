@@ -2,20 +2,46 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Meme Generator - Telegram Mini App</title>
   <meta name="description" content="Telegram Mini App for generating, editing, moderating, and sharing memes in chat communities.">
   <meta property="og:title" content="Meme Generator - Telegram Mini App">
   <meta property="og:description" content="Telegram Mini App for generating, editing, moderating, and sharing memes in chat communities.">
-  
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <meta name="theme-color" content="#0f172a">
+
+  <!-- Critical styles to avoid white flash before CSS bundle loads -->
+  <style>
+    html, body {
+      background-color: #0f172a;
+      color: #f8fafc;
+      margin: 0;
+      padding: 0;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      min-height: 100%;
+    }
+  </style>
+
+  <!-- Telegram WebApp SDK (deferred to prevent render blocking on slow networks) -->
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
 
   <!-- Font Awesome Icons for full visual fidelity -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
-  <div id="root"></div>
+  <div id="root">
+    <!-- Immediate non-white fallback placeholder while React mounts -->
+    <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: #f8fafc; text-align: center; font-family: system-ui, -apple-system, sans-serif; padding: 24px;">
+      <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #fcd34d); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.3);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+        </svg>
+      </div>
+      <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff;">ураа мемы</div>
+      <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">Загрузка приложения...</div>
+    </div>
+  </div>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

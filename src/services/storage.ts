@@ -20,6 +20,32 @@ export interface AppSyncData {
   exportedAt: number;
 }
 
+// In-memory fallback if localStorage is disabled or throws SecurityError
+const inMemoryStore = new Map<string, string>();
+
+function safeGetItem(key: string): string | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const val = window.localStorage.getItem(key);
+      if (val !== null) return val;
+    }
+  } catch {
+    // Storage access restricted/blocked
+  }
+  return inMemoryStore.get(key) ?? null;
+}
+
+function safeSetItem(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(key, value);
+    }
+  } catch {
+    // Storage access restricted/blocked
+  }
+  inMemoryStore.set(key, value);
+}
+
 // BroadcastChannel for instant same-browser cross-tab sync
 let syncChannel: BroadcastChannel | null = null;
 try {
@@ -32,26 +58,42 @@ try {
 
 export function broadcastLocalChange(type: 'templates' | 'memes' | 'adminIds' | 'full'): void {
   if (syncChannel) {
-    syncChannel.postMessage({ type, timestamp: Date.now() });
+    try {
+      syncChannel.postMessage({ type, timestamp: Date.now() });
+    } catch {
+      // ignore
+    }
   }
 }
 
 export function subscribeToSyncChannel(callback: (type: string) => void): () => void {
   if (!syncChannel) return () => {};
   const handler = (event: MessageEvent) => {
-    if (event.data?.type) {
-      callback(event.data.type);
+    try {
+      if (event.data?.type) {
+        callback(event.data.type);
+      }
+    } catch {
+      // ignore
     }
   };
-  syncChannel.addEventListener('message', handler);
+  try {
+    syncChannel.addEventListener('message', handler);
+  } catch {
+    // ignore
+  }
   return () => {
-    syncChannel?.removeEventListener('message', handler);
+    try {
+      syncChannel?.removeEventListener('message', handler);
+    } catch {
+      // ignore
+    }
   };
 }
 
 export function loadMemesState(): MemesState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.MEMES);
+    const raw = safeGetItem(STORAGE_KEYS.MEMES);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -70,7 +112,7 @@ export function loadMemesState(): MemesState {
 
 export function saveMemesState(state: MemesState): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.MEMES, JSON.stringify(state));
+    safeSetItem(STORAGE_KEYS.MEMES, JSON.stringify(state));
     broadcastLocalChange('memes');
   } catch (e) {
     console.error('Error saving memes to storage:', e);
@@ -79,7 +121,7 @@ export function saveMemesState(state: MemesState): void {
 
 export function loadAllTemplates(): MemeTemplate[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ALL_TEMPLATES);
+    const raw = safeGetItem(STORAGE_KEYS.ALL_TEMPLATES);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -92,7 +134,7 @@ export function loadAllTemplates(): MemeTemplate[] {
 
 export function saveAllTemplates(templates: MemeTemplate[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.ALL_TEMPLATES, JSON.stringify(templates));
+    safeSetItem(STORAGE_KEYS.ALL_TEMPLATES, JSON.stringify(templates));
     broadcastLocalChange('templates');
   } catch (e) {
     console.error('Error saving templates to storage:', e);
@@ -101,7 +143,7 @@ export function saveAllTemplates(templates: MemeTemplate[]): void {
 
 export function loadAdminIds(): number[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ADMIN_IDS);
+    const raw = safeGetItem(STORAGE_KEYS.ADMIN_IDS);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed.map(Number).filter((n) => !isNaN(n));
@@ -114,7 +156,7 @@ export function loadAdminIds(): number[] {
 
 export function saveAdminIds(ids: number[]): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.ADMIN_IDS, JSON.stringify(ids));
+    safeSetItem(STORAGE_KEYS.ADMIN_IDS, JSON.stringify(ids));
     broadcastLocalChange('adminIds');
   } catch (e) {
     console.error('Error saving admin IDs:', e);
@@ -122,11 +164,19 @@ export function saveAdminIds(ids: number[]): void {
 }
 
 export function getStoredAdminFlag(): boolean {
-  return localStorage.getItem(STORAGE_KEYS.IS_ADMIN) === 'true';
+  try {
+    return safeGetItem(STORAGE_KEYS.IS_ADMIN) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export function setStoredAdminFlag(flag: boolean): void {
-  localStorage.setItem(STORAGE_KEYS.IS_ADMIN, flag ? 'true' : 'false');
+  try {
+    safeSetItem(STORAGE_KEYS.IS_ADMIN, flag ? 'true' : 'false');
+  } catch {
+    // ignore
+  }
 }
 
 export function exportSyncCode(templates: MemeTemplate[], memes: MemesState, adminIds: number[]): string {

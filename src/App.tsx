@@ -24,7 +24,7 @@ import { GalleryView } from './components/GalleryView';
 import { AdminView } from './components/AdminView';
 import { TemplateModal } from './components/TemplateModal';
 import { Toast, ToastMessage } from './components/Toast';
-import { initTelegram, getTelegramWebApp, telegramHaptic } from './services/telegram';
+import { initTelegram, telegramHaptic, setTelegramBackButton } from './services/telegram';
 
 export const App: React.FC = () => {
   // Navigation tab
@@ -142,26 +142,17 @@ export const App: React.FC = () => {
 
   // Telegram Native BackButton integration
   useEffect(() => {
-    const tg = getTelegramWebApp();
-    if (!tg?.BackButton) return;
-
-    if (currentTab !== 'home' || isTemplateModalOpen) {
-      tg.BackButton.show();
-      const handleBack = () => {
-        telegramHaptic('light');
-        if (isTemplateModalOpen) {
-          setIsTemplateModalOpen(false);
-        } else if (currentTab !== 'home') {
-          setCurrentTab('home');
-        }
-      };
-      tg.BackButton.onClick(handleBack);
-      return () => {
-        tg.BackButton?.offClick(handleBack);
-      };
-    } else {
-      tg.BackButton.hide();
-    }
+    const shouldShowBack = currentTab !== 'home' || isTemplateModalOpen;
+    const handleBack = () => {
+      telegramHaptic('light');
+      if (isTemplateModalOpen) {
+        setIsTemplateModalOpen(false);
+      } else if (currentTab !== 'home') {
+        setCurrentTab('home');
+      }
+    };
+    const cleanup = setTelegramBackButton(shouldShowBack, handleBack);
+    return cleanup;
   }, [currentTab, isTemplateModalOpen]);
 
   // Check admin rights
