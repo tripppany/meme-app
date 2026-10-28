@@ -220,6 +220,27 @@
         </div>
       </div>
 
+      <!-- Admin Feature 2: Manage Admin Users -->
+      <div class="bg-slate-800 rounded-2xl p-4 border border-slate-700 space-y-3">
+        <h3 class="font-bold text-sm text-amber-400 flex items-center gap-2">
+          <i class="fa-solid fa-user-shield"></i> Управление администраторами
+        </h3>
+        <div class="space-y-2">
+          <div class="flex gap-2">
+            <input type="number" id="newAdminIdInput" placeholder="Telegram ID (например: 12345678)" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+            <button onclick="addAdminId()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1">
+              <i class="fa-solid fa-plus"></i> Добавить
+            </button>
+          </div>
+          <div class="pt-2">
+            <div class="text-[11px] font-semibold text-slate-400 mb-1">Список Telegram ID администраторов:</div>
+            <div id="adminIdsList" class="space-y-1.5">
+              <!-- Admin IDs injected dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Pending Queue -->
       <div class="space-y-3">
         <h3 class="font-bold text-md text-slate-200">Очередь мемов на проверку</h3>
@@ -236,7 +257,6 @@
     </section>
 
   </main>
-
   <!-- TEMPLATE SELECTOR MODAL -->
   <div id="templateModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
     <div class="bg-slate-800 w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-slate-700 max-h-[85vh] flex flex-col overflow-hidden">
