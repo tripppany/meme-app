@@ -101,20 +101,32 @@ export const App: React.FC = () => {
 
   // Initial load & Polling for real-time cross-device synchronization
   const isInitialMount = useRef(true);
+  const isSyncing = useRef(false);
+
+  const safeSync = useCallback(async (notify = false) => {
+    if (isSyncing.current) return;
+    isSyncing.current = true;
+    try {
+      await syncFromServer(notify);
+    } finally {
+      isSyncing.current = false;
+    }
+  }, [syncFromServer]);
+
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
-      syncFromServer();
+      safeSync();
     }
 
-    // Poll every 5 seconds for cross-device updates
+    // Gentle polling interval for cross-device updates (8 seconds avoids VPN congestion)
     const pollInterval = setInterval(() => {
-      syncFromServer();
-    }, 5000);
+      safeSync();
+    }, 8000);
 
     // Refresh when user focuses the tab/window
     const handleFocus = () => {
-      syncFromServer();
+      safeSync();
     };
     window.addEventListener('focus', handleFocus);
 
@@ -130,19 +142,24 @@ export const App: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       unsubscribeChannel();
     };
-  }, [syncFromServer]);
+  }, [safeSync]);
 
   // Initialize Telegram WebApp & user access
   useEffect(() => {
+    try {
+      const preloader = document.getElementById('preloader');
+      if (preloader) {
+        preloader.remove();
+      }
+    } catch {
+      // ignore
+    }
+
     const tgUser = initTelegram((detectedUser) => {
       setUser(detectedUser);
     });
     if (tgUser) {
       setUser(tgUser);
-    }
-    const preloader = document.getElementById('preloader');
-    if (preloader) {
-      preloader.remove();
     }
   }, []);
 

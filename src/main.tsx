@@ -6,6 +6,16 @@ import './index.css';
 
 const rootElement = document.getElementById('root');
 if (rootElement) {
+  // Immediately dismiss preloader placeholder once React execution begins
+  try {
+    const preloader = document.getElementById('preloader');
+    if (preloader) {
+      preloader.remove();
+    }
+  } catch {
+    // ignore
+  }
+
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
       <ErrorBoundary>

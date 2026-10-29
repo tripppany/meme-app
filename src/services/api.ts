@@ -10,10 +10,29 @@ export interface SyncPayload {
   lastModified?: number;
 }
 
+/**
+ * Resilient fetch with a strict timeout to prevent indefinite hangs over slow/flaky VPNs or proxies.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 4000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    return res;
+  } catch (err) {
+    clearTimeout(timer);
+    throw err;
+  }
+}
+
 export const api = {
   async getStatus(): Promise<{ status: string; templatesCount: number; memesCount: number; pendingCount: number } | null> {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetchWithTimeout('/api/status', {}, 3000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -23,7 +42,7 @@ export const api = {
 
   async getTemplates(): Promise<MemeTemplate[] | null> {
     try {
-      const res = await fetch('/api/templates');
+      const res = await fetchWithTimeout('/api/templates', {}, 3500);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -33,11 +52,11 @@ export const api = {
 
   async addTemplate(title: string, url: string, isHidden = false): Promise<MemeTemplate | null> {
     try {
-      const res = await fetch('/api/templates', {
+      const res = await fetchWithTimeout('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title, url, isCustom: true, isHidden }),
-      });
+      }, 5000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -47,11 +66,11 @@ export const api = {
 
   async renameTemplate(id: string, title: string): Promise<MemeTemplate | null> {
     try {
-      const res = await fetch(`/api/templates/${encodeURIComponent(id)}`, {
+      const res = await fetchWithTimeout(`/api/templates/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
-      });
+      }, 4000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -61,11 +80,11 @@ export const api = {
 
   async toggleTemplateVisibility(id: string, isHidden?: boolean): Promise<MemeTemplate | null> {
     try {
-      const res = await fetch(`/api/templates/${encodeURIComponent(id)}/visibility`, {
+      const res = await fetchWithTimeout(`/api/templates/${encodeURIComponent(id)}/visibility`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isHidden }),
-      });
+      }, 4000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -75,9 +94,9 @@ export const api = {
 
   async deleteTemplate(id: string): Promise<boolean> {
     try {
-      const res = await fetch(`/api/templates/${encodeURIComponent(id)}`, {
+      const res = await fetchWithTimeout(`/api/templates/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-      });
+      }, 4000);
       return res.ok;
     } catch {
       return false;
@@ -86,9 +105,9 @@ export const api = {
 
   async resetTemplates(): Promise<MemeTemplate[] | null> {
     try {
-      const res = await fetch('/api/templates/reset', {
+      const res = await fetchWithTimeout('/api/templates/reset', {
         method: 'POST',
-      });
+      }, 4000);
       if (!res.ok) return null;
       const data = await res.json();
       return data.templates;
@@ -99,7 +118,7 @@ export const api = {
 
   async getMemes(): Promise<{ pending: MemeItem[]; approved: MemeItem[] } | null> {
     try {
-      const res = await fetch('/api/memes');
+      const res = await fetchWithTimeout('/api/memes', {}, 3500);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -109,11 +128,11 @@ export const api = {
 
   async submitMeme(dataUrl: string, author: string): Promise<MemeItem | null> {
     try {
-      const res = await fetch('/api/memes', {
+      const res = await fetchWithTimeout('/api/memes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dataUrl, author }),
-      });
+      }, 8000); // Allow slightly longer for large base64 image
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -123,11 +142,11 @@ export const api = {
 
   async updateMemeStatus(id: string, status: 'approved' | 'rejected', isAnonymous?: boolean): Promise<boolean> {
     try {
-      const res = await fetch(`/api/memes/${encodeURIComponent(id)}/status`, {
+      const res = await fetchWithTimeout(`/api/memes/${encodeURIComponent(id)}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, isAnonymous }),
-      });
+      }, 4000);
       return res.ok;
     } catch {
       return false;
@@ -136,11 +155,11 @@ export const api = {
 
   async toggleMemeAnonymity(id: string, isAnonymous?: boolean): Promise<MemeItem | null> {
     try {
-      const res = await fetch(`/api/memes/${encodeURIComponent(id)}/anonymity`, {
+      const res = await fetchWithTimeout(`/api/memes/${encodeURIComponent(id)}/anonymity`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isAnonymous }),
-      });
+      }, 4000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -150,7 +169,7 @@ export const api = {
 
   async getAdminIds(): Promise<number[] | null> {
     try {
-      const res = await fetch('/api/admin-ids');
+      const res = await fetchWithTimeout('/api/admin-ids', {}, 3500);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -160,11 +179,11 @@ export const api = {
 
   async addAdminId(id: number): Promise<number[] | null> {
     try {
-      const res = await fetch('/api/admin-ids', {
+      const res = await fetchWithTimeout('/api/admin-ids', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
-      });
+      }, 4000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -174,9 +193,9 @@ export const api = {
 
   async removeAdminId(id: number): Promise<boolean> {
     try {
-      const res = await fetch(`/api/admin-ids/${encodeURIComponent(id)}`, {
+      const res = await fetchWithTimeout(`/api/admin-ids/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-      });
+      }, 4000);
       return res.ok;
     } catch {
       return false;
@@ -185,7 +204,7 @@ export const api = {
 
   async getSyncPayload(): Promise<SyncPayload | null> {
     try {
-      const res = await fetch('/api/sync');
+      const res = await fetchWithTimeout('/api/sync', {}, 4000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -195,11 +214,11 @@ export const api = {
 
   async applySyncPayload(payload: SyncPayload): Promise<boolean> {
     try {
-      const res = await fetch('/api/sync', {
+      const res = await fetchWithTimeout('/api/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      });
+      }, 6000);
       return res.ok;
     } catch {
       return false;
