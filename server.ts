@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,7 @@ const PORT = 3000;
 const DATA_FILE = path.join(__dirname, 'server_data.json');
 
 app.use(cors());
+app.use(compression());
 app.use(express.json({ limit: '50mb' }));
 
 // Initial default templates

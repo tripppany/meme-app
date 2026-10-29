@@ -21,97 +21,91 @@
       -webkit-user-select: none;
       min-height: 100%;
     }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(0.97); }
+    }
   </style>
 
-  <!-- Telegram WebApp SDK (Asynchronous and non-blocking so it NEVER halts rendering over VPN) -->
+  <!-- Telegram WebApp SDK (Non-blocking async loader) -->
   <script>
     (function() {
-      function initTgInstance() {
-        try {
-          if (window.Telegram && window.Telegram.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-            if (window.Telegram.WebApp.setHeaderColor) window.Telegram.WebApp.setHeaderColor('#1e293b');
-            if (window.Telegram.WebApp.setBackgroundColor) window.Telegram.WebApp.setBackgroundColor('#0f172a');
-            return true;
-          }
-        } catch (e) {
-          console.warn('[Telegram SDK] init error:', e);
+      // Early setup of Telegram WebApp if already injected by client
+      try {
+        if (window.Telegram && window.Telegram.WebApp) {
+          window.Telegram.WebApp.ready();
+          window.Telegram.WebApp.expand();
+          if (window.Telegram.WebApp.setHeaderColor) window.Telegram.WebApp.setHeaderColor('#1e293b');
+          if (window.Telegram.WebApp.setBackgroundColor) window.Telegram.WebApp.setBackgroundColor('#0f172a');
+        } else {
+          // Asynchronously attempt to load external script without blocking rendering
+          var tgScript = document.createElement('script');
+          tgScript.src = 'https://telegram.org/js/telegram-web-app.js';
+          tgScript.async = true;
+          tgScript.defer = true;
+          tgScript.onload = function() {
+            try {
+              if (window.Telegram && window.Telegram.WebApp) {
+                window.Telegram.WebApp.ready();
+                window.Telegram.WebApp.expand();
+              }
+            } catch (e) {}
+          };
+          tgScript.onerror = function() {
+            console.warn('[Telegram SDK] External script blocked or unreachable. Standalone mode active.');
+          };
+          document.head.appendChild(tgScript);
         }
-        return false;
+      } catch (e) {
+        console.warn('[Telegram SDK] Early init warning:', e);
       }
 
-      // Check if Telegram client already injected WebApp directly into window
-      if (!initTgInstance()) {
-        // Asynchronously load external SDK with non-blocking script element
-        var tgScript = document.createElement('script');
-        tgScript.src = 'https://telegram.org/js/telegram-web-app.js';
-        tgScript.async = true;
-        tgScript.defer = true;
-        tgScript.onload = function() {
-          initTgInstance();
-        };
-        tgScript.onerror = function() {
-          console.warn('[Telegram SDK] External script blocked or unreachable (VPN/firewall). Using standalone mode.');
-        };
-        document.head.appendChild(tgScript);
-      }
-
-      // Safeguard interval to catch delayed injection
-      var retries = 0;
-      var interval = setInterval(function() {
-        retries++;
-        if (initTgInstance() || retries >= 15) {
-          clearInterval(interval);
-        }
-      }, 100);
+      // Universal uncaught error trap for older WebViews
+      window.addEventListener('error', function(event) {
+        console.error('[Global Error]', event.message, event.filename, event.lineno);
+      });
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('[Global Unhandled Rejection]', event.reason);
+      });
     })();
   </script>
-
-  <!-- Font Awesome Icons (loaded asynchronously, never blocks rendering) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
-  <noscript>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  </noscript>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
   <div id="root">
-    <!-- Immediate non-white fallback placeholder while React mounts -->
+    <!-- Immediate branded preloader while React bundle mounts -->
     <div id="preloader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: #f8fafc; text-align: center; font-family: system-ui, -apple-system, sans-serif; padding: 24px;">
-      <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #fcd34d); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.3); animation: pulse 1.5s infinite ease-in-out;">
+      <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #fcd34d); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.3); animation: pulse 1.6s infinite ease-in-out;">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
         </svg>
       </div>
       <div style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff;">ураа мемы</div>
-      <div id="loader-status" style="font-size: 13px; color: #94a3b8; margin-top: 8px;">Загрузка приложения...</div>
+      <div id="loader-status" style="font-size: 13px; color: #94a3b8; margin-top: 8px;">Загрузка мемов...</div>
       
-      <!-- Fallback button in case of slow network / VPN -->
-      <div id="slow-network-fallback" style="display: none; margin-top: 16px;">
-        <div style="font-size: 11px; color: #fbbf24; margin-bottom: 12px; max-width: 260px; line-height: 1.4;">
-          Медленный ответ сети или VPN. Нажмите для быстрой перезагрузки:
-        </div>
-        <button onclick="window.location.reload(true)" style="background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; border: none; border-radius: 12px; padding: 10px 20px; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);">
-          Перезагрузить приложение
+      <!-- Subtle spinning indicator -->
+      <div style="margin-top: 18px; width: 22px; height: 22px; border: 2.5px solid rgba(245, 158, 11, 0.2); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+
+      <!-- Graceful emergency reload button shown only after 12s of no response -->
+      <div id="extended-fallback" style="display: none; margin-top: 24px;">
+        <button onclick="window.location.reload(true)" style="background: #334155; color: #cbd5e1; border: 1px solid #475569; border-radius: 12px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;">
+          Обновить страницу
         </button>
       </div>
     </div>
   </div>
+
   <script>
+    // Only show fallback after 12s if React hasn't mounted
     setTimeout(function() {
-      var statusEl = document.getElementById('loader-status');
-      if (statusEl && document.getElementById('preloader')) {
-        statusEl.textContent = 'Инициализация компонентов...';
+      var fb = document.getElementById('extended-fallback');
+      if (fb && document.getElementById('preloader')) {
+        fb.style.display = 'block';
       }
-    }, 1200);
-    setTimeout(function() {
-      var fb = document.getElementById('slow-network-fallback');
-      var statusEl = document.getElementById('loader-status');
-      if (document.getElementById('preloader')) {
-        if (statusEl) statusEl.textContent = 'Ожидание ответа сети (VPN)...';
-        if (fb) fb.style.display = 'block';
-      }
-    }, 2500);
+    }, 12000);
   </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
