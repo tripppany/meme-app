@@ -156,7 +156,7 @@
   </div>
 
   <script>
-    // After 5 seconds, provide recovery buttons if bundle is still downloading
+    // After 4 seconds, provide recovery buttons if bundle is still downloading
     setTimeout(function() {
       var p = document.getElementById('preloader');
       var actionBox = document.getElementById('loader-action-box');
@@ -165,7 +165,32 @@
         actionBox.style.display = 'block';
         if (statusEl) statusEl.textContent = 'Инициализация мемов...';
       }
-    }, 5000);
+    }, 4000);
+
+    // GitHub Pages Static Fallback:
+    // If running directly from GitHub repository root where /src/main.tsx cannot be parsed,
+    // dynamically load pre-compiled production bundle!
+    (function() {
+      var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
+      if (isGitHubPages) {
+        setTimeout(function() {
+          if (!window.__APP_LOADED__ && document.getElementById('preloader')) {
+            console.log('[GitHub Pages] Loading pre-compiled bundle from ./dist/assets/app.js');
+            var s = document.createElement('script');
+            s.type = 'module';
+            s.crossOrigin = 'anonymous';
+            s.src = './dist/assets/app.js';
+            document.body.appendChild(s);
+
+            var c = document.createElement('link');
+            c.rel = 'stylesheet';
+            c.crossOrigin = 'anonymous';
+            c.href = './dist/assets/app.css';
+            document.head.appendChild(c);
+          }
+        }, 500);
+      }
+    })();
   </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>

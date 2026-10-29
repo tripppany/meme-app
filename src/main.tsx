@@ -5,6 +5,11 @@ import { App } from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
+// Flag indicating app bundle execution started
+if (typeof window !== 'undefined') {
+  (window as any).__APP_LOADED__ = true;
+}
+
 // Remove the initial preloader placeholder as soon as bundle starts executing
 try {
   const preloader = document.getElementById('preloader');

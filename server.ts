@@ -331,7 +331,7 @@ async function startServer() {
         const assetsDir = path.join(distPath, 'assets');
         if (fs.existsSync(assetsDir)) {
           const files = fs.readdirSync(assetsDir);
-          const jsEntry = files.find((f) => f.startsWith('index-') && f.endsWith('.js'));
+          const jsEntry = files.find((f) => f.endsWith('.js'));
           if (jsEntry) {
             res.setHeader('Content-Type', 'text/javascript');
             return res.sendFile(path.join(assetsDir, jsEntry));
