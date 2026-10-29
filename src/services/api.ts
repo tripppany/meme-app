@@ -31,12 +31,12 @@ export const api = {
     }
   },
 
-  async addTemplate(title: string, url: string): Promise<MemeTemplate | null> {
+  async addTemplate(title: string, url: string, isHidden = false): Promise<MemeTemplate | null> {
     try {
       const res = await fetch('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, url, isCustom: true }),
+        body: JSON.stringify({ title, url, isCustom: true, isHidden }),
       });
       if (!res.ok) return null;
       return await res.json();
@@ -51,6 +51,20 @@ export const api = {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  async toggleTemplateVisibility(id: string, isHidden?: boolean): Promise<MemeTemplate | null> {
+    try {
+      const res = await fetch(`/api/templates/${encodeURIComponent(id)}/visibility`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isHidden }),
       });
       if (!res.ok) return null;
       return await res.json();

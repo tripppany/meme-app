@@ -134,9 +134,15 @@ export const App: React.FC = () => {
 
   // Initialize Telegram WebApp & user access
   useEffect(() => {
-    const tgUser = initTelegram();
+    const tgUser = initTelegram((detectedUser) => {
+      setUser(detectedUser);
+    });
     if (tgUser) {
       setUser(tgUser);
+    }
+    const preloader = document.getElementById('preloader');
+    if (preloader) {
+      preloader.remove();
     }
   }, []);
 
@@ -325,12 +331,13 @@ export const App: React.FC = () => {
   };
 
   // Add custom template (Admin)
-  const handleAddTemplate = async (title: string, dataUrl: string) => {
+  const handleAddTemplate = async (title: string, dataUrl: string, isHidden = false) => {
     const localTemplate: MemeTemplate = {
       id: 't_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
       title,
       url: dataUrl,
       isCustom: true,
+      isHidden: Boolean(isHidden),
       createdAt: Date.now(),
     };
 
@@ -341,7 +348,7 @@ export const App: React.FC = () => {
     });
 
     try {
-      const remote = await api.addTemplate(title, dataUrl);
+      const remote = await api.addTemplate(title, dataUrl, isHidden);
       if (remote) {
         setTemplates((prev) => {
           const next = prev.map((t) => (t.id === localTemplate.id ? remote : t));
@@ -353,7 +360,38 @@ export const App: React.FC = () => {
       console.warn('Server sync error, saved locally:', e);
     }
 
-    addToast('success', `Шаблон "${title}" добавлен и синхронизирован!`);
+    addToast(
+      'success',
+      isHidden
+        ? `Шаблон "${title}" добавлен в скрытом режиме (черновик)`
+        : `Шаблон "${title}" добавлен и синхронизирован!`
+    );
+  };
+
+  // Toggle template visibility without deleting (Admin)
+  const handleToggleTemplateVisibility = async (id: string, explicitHidden?: boolean) => {
+    const target = templates.find((t) => t.id === id);
+    if (!target) return;
+    const nextHidden = explicitHidden !== undefined ? explicitHidden : !target.isHidden;
+
+    setTemplates((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, isHidden: nextHidden } : t));
+      saveAllTemplates(next);
+      return next;
+    });
+
+    try {
+      await api.toggleTemplateVisibility(id, nextHidden);
+    } catch (e) {
+      console.warn('API toggle visibility error:', e);
+    }
+
+    addToast(
+      'info',
+      nextHidden
+        ? `Шаблон "${target.title}" скрыт от остальных пользователей`
+        : `Шаблон "${target.title}" снова виден всем!`
+    );
   };
 
   // Rename ANY template (Admin)
@@ -530,6 +568,7 @@ export const App: React.FC = () => {
             onToggleAnonymity={handleToggleAnonymity}
             onRejectMeme={handleRejectMeme}
             onAddTemplate={handleAddTemplate}
+            onToggleTemplateVisibility={handleToggleTemplateVisibility}
             onRenameTemplate={handleRenameTemplate}
             onDeleteTemplate={handleDeleteTemplate}
             onResetTemplates={handleResetTemplates}
@@ -546,7 +585,7 @@ export const App: React.FC = () => {
       <TemplateModal
         isOpen={isTemplateModalOpen}
         onClose={() => setIsTemplateModalOpen(false)}
-        templates={templates}
+        templates={isAdmin ? templates : templates.filter((t) => !t.isHidden)}
         onSelectTemplate={handleSelectTemplate}
       />
 

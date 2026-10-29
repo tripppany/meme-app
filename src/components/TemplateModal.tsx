@@ -37,8 +37,13 @@ export const TemplateModal: React.FC<TemplateModalProps> = ({
             <div
               key={template.id}
               onClick={() => onSelectTemplate(template)}
-              className="group bg-slate-900 border border-slate-700/80 hover:border-indigo-500 rounded-xl p-2 cursor-pointer transition flex flex-col items-center gap-2 active:scale-95"
+              className="group bg-slate-900 border border-slate-700/80 hover:border-indigo-500 rounded-xl p-2 cursor-pointer transition flex flex-col items-center gap-2 active:scale-95 relative"
             >
+              {template.isHidden && (
+                <span className="absolute top-2 left-2 z-10 bg-amber-500/90 text-slate-950 font-extrabold text-[9px] px-1.5 py-0.5 rounded shadow flex items-center gap-1">
+                  <i className="fa-solid fa-eye-slash text-[8px]"></i> Скрыт
+                </span>
+              )}
               <div className="w-full h-28 rounded-lg overflow-hidden bg-slate-950 flex items-center justify-center p-1 border border-slate-800/50">
                 <img
                   src={template.url}

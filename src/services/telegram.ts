@@ -68,29 +68,50 @@ export function isTelegramEnv(): boolean {
   }
 }
 
-export function initTelegram(): TelegramUser | null {
-  const tg = getTelegramWebApp();
-  if (!tg) return null;
+export function initTelegram(onUserDetected?: (user: TelegramUser) => void): TelegramUser | null {
+  const triggerReady = (tg: TelegramWebApp) => {
+    try {
+      tg.ready?.();
+      tg.expand?.();
+      tg.enableClosingConfirmation?.();
+      try {
+        tg.setHeaderColor?.('#1e293b');
+      } catch {
+        // not supported in older webapp
+      }
+      try {
+        tg.setBackgroundColor?.('#0f172a');
+      } catch {
+        // not supported in older webapp
+      }
+    } catch (e) {
+      console.warn('Telegram init ready error:', e);
+    }
+  };
 
-  try {
-    tg.ready?.();
-    tg.expand?.();
-    tg.enableClosingConfirmation?.();
-    try {
-      tg.setHeaderColor?.('#1e293b');
-    } catch {
-      // not supported in older webapp
-    }
-    try {
-      tg.setBackgroundColor?.('#0f172a');
-    } catch {
-      // not supported in older webapp
-    }
-    return tg.initDataUnsafe?.user || null;
-  } catch (err) {
-    console.warn('Telegram init error:', err);
-    return null;
+  const initialTg = getTelegramWebApp();
+  if (initialTg) {
+    triggerReady(initialTg);
+    return initialTg.initDataUnsafe?.user || null;
   }
+
+  // If Telegram WebApp SDK is still loading asynchronously, poll for it
+  let attempts = 0;
+  const timer = setInterval(() => {
+    attempts++;
+    const asyncTg = getTelegramWebApp();
+    if (asyncTg) {
+      clearInterval(timer);
+      triggerReady(asyncTg);
+      if (asyncTg.initDataUnsafe?.user && onUserDetected) {
+        onUserDetected(asyncTg.initDataUnsafe.user);
+      }
+    } else if (attempts >= 30) {
+      clearInterval(timer);
+    }
+  }, 100);
+
+  return null;
 }
 
 export function telegramHaptic(type: 'light' | 'medium' | 'success' | 'error' = 'light') {

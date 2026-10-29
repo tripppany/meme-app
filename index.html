@@ -23,25 +23,68 @@
     }
   </style>
 
-  <!-- Telegram WebApp SDK (deferred to prevent render blocking on slow networks) -->
-  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <!-- Telegram WebApp SDK (initialized immediately) -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    (function() {
+      function initTg() {
+        try {
+          if (window.Telegram && window.Telegram.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+            if (window.Telegram.WebApp.setHeaderColor) window.Telegram.WebApp.setHeaderColor('#1e293b');
+            if (window.Telegram.WebApp.setBackgroundColor) window.Telegram.WebApp.setBackgroundColor('#0f172a');
+          }
+        } catch (e) {}
+      }
+      initTg();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTg);
+      }
+      window.addEventListener('load', initTg);
+      var counter = 0;
+      var interval = setInterval(function() {
+        initTg();
+        counter++;
+        if (counter > 15) clearInterval(interval);
+      }, 100);
+    })();
+  </script>
 
-  <!-- Font Awesome Icons for full visual fidelity -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Font Awesome Icons (loaded asynchronously so it never blocks script execution) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+  <noscript>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  </noscript>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
   <div id="root">
     <!-- Immediate non-white fallback placeholder while React mounts -->
-    <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: #f8fafc; text-align: center; font-family: system-ui, -apple-system, sans-serif; padding: 24px;">
-      <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #fcd34d); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.3);">
+    <div id="preloader" style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: #0f172a; color: #f8fafc; text-align: center; font-family: system-ui, -apple-system, sans-serif; padding: 24px;">
+      <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #fcd34d); border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; box-shadow: 0 10px 25px -5px rgba(245, 158, 11, 0.3); animation: pulse 1.5s infinite ease-in-out;">
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
         </svg>
       </div>
-      <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff;">ураа мемы</div>
-      <div style="font-size: 12px; color: #94a3b8; margin-top: 6px;">Загрузка приложения...</div>
+      <div style="font-size: 20px; font-weight: 800; letter-spacing: 0.5px; color: #ffffff;">ураа мемы</div>
+      <div id="loader-status" style="font-size: 13px; color: #94a3b8; margin-top: 8px;">Загрузка приложения...</div>
+      
+      <!-- Fallback button in case of slow network -->
+      <div id="slow-network-fallback" style="display: none; margin-top: 20px;">
+        <button onclick="window.location.reload()" style="background-color: #4f46e5; color: white; border: none; border-radius: 12px; padding: 10px 20px; font-size: 12px; font-weight: bold; cursor: pointer;">
+          Обновить страницу
+        </button>
+      </div>
     </div>
   </div>
+  <script>
+    setTimeout(function() {
+      var fb = document.getElementById('slow-network-fallback');
+      if (fb && document.getElementById('preloader')) {
+        fb.style.display = 'block';
+      }
+    }, 3500);
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

@@ -53,7 +53,7 @@ const INITIAL_APPROVED = [
 ];
 
 interface ServerState {
-  templates: Array<{ id: string; title: string; url: string; isCustom?: boolean; isDefault?: boolean; createdAt?: number }>;
+  templates: Array<{ id: string; title: string; url: string; isCustom?: boolean; isDefault?: boolean; isHidden?: boolean; createdAt?: number }>;
   memes: {
     pending: any[];
     approved: any[];
@@ -150,7 +150,7 @@ app.get('/api/templates', (req, res) => {
 });
 
 app.post('/api/templates', (req, res) => {
-  const { title, url, isCustom } = req.body;
+  const { title, url, isCustom, isHidden } = req.body;
   if (!title || !url) {
     return res.status(400).json({ error: 'title and url are required' });
   }
@@ -159,6 +159,7 @@ app.post('/api/templates', (req, res) => {
     title: String(title).trim(),
     url: String(url),
     isCustom: isCustom !== false,
+    isHidden: Boolean(isHidden),
     createdAt: Date.now(),
   };
   serverState.templates.push(newTemplate);
@@ -168,17 +169,34 @@ app.post('/api/templates', (req, res) => {
 
 app.patch('/api/templates/:id', (req, res) => {
   const { id } = req.params;
-  const { title } = req.body;
-  if (!title || !String(title).trim()) {
-    return res.status(400).json({ error: 'Valid title is required' });
-  }
+  const { title, isHidden } = req.body;
 
   const template = serverState.templates.find((t) => t.id === id);
   if (!template) {
     return res.status(404).json({ error: 'Template not found' });
   }
 
-  template.title = String(title).trim();
+  if (title !== undefined && String(title).trim()) {
+    template.title = String(title).trim();
+  }
+  if (isHidden !== undefined) {
+    template.isHidden = Boolean(isHidden);
+  }
+
+  persistData();
+  res.json(template);
+});
+
+app.patch('/api/templates/:id/visibility', (req, res) => {
+  const { id } = req.params;
+  const { isHidden } = req.body;
+
+  const template = serverState.templates.find((t) => t.id === id);
+  if (!template) {
+    return res.status(404).json({ error: 'Template not found' });
+  }
+
+  template.isHidden = isHidden !== undefined ? Boolean(isHidden) : !template.isHidden;
   persistData();
   res.json(template);
 });
@@ -290,9 +308,22 @@ app.delete('/api/admin-ids/:id', (req, res) => {
   res.json(serverState.adminIds);
 });
 
-// Mount Vite middleware in development
+// Mount static bundle or Vite middleware
 async function startServer() {
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(__dirname, 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (process.env.NODE_ENV === 'production' || hasDist) {
+    console.log('[Server] Serving production bundle from dist/');
+    app.use(express.static(distPath));
+    app.use((req, res, next) => {
+      if (req.originalUrl.startsWith('/api')) {
+        return next();
+      }
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    console.log('[Server] Starting Vite development server middleware');
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -315,19 +346,6 @@ async function startServer() {
         next(e);
       }
     });
-  } else {
-    const distPath = path.join(__dirname, 'dist');
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.use((req, res, next) => {
-        if (req.originalUrl.startsWith('/api')) {
-          return next();
-        }
-        res.sendFile(path.join(distPath, 'index.html'));
-      });
-    } else {
-      console.warn('[Server] dist directory not found in production mode');
-    }
   }
 
   app.listen(PORT, '0.0.0.0', () => {

@@ -27,6 +27,7 @@ export interface MemeTemplate {
   title: string;
   url: string;
   isCustom?: boolean;
+  isHidden?: boolean;
   createdAt?: number;
 }
 

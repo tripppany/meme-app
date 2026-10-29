@@ -13,7 +13,8 @@ interface AdminViewProps {
   onApproveMeme: (id: string, isAnonymous?: boolean) => void;
   onToggleAnonymity: (id: string, explicitAnonymity?: boolean) => void;
   onRejectMeme: (id: string) => void;
-  onAddTemplate: (title: string, dataUrl: string) => void;
+  onAddTemplate: (title: string, dataUrl: string, isHidden?: boolean) => void;
+  onToggleTemplateVisibility: (id: string, isHidden?: boolean) => void;
   onRenameTemplate: (id: string, newTitle: string) => void;
   onDeleteTemplate: (id: string) => void;
   onResetTemplates: () => void;
@@ -34,6 +35,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onToggleAnonymity,
   onRejectMeme,
   onAddTemplate,
+  onToggleTemplateVisibility,
   onRenameTemplate,
   onDeleteTemplate,
   onResetTemplates,
@@ -48,6 +50,8 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [templateImage, setTemplateImage] = useState<string | null>(null);
   const [templateUrlInput, setTemplateUrlInput] = useState('');
   const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
+  const [addAsHidden, setAddAsHidden] = useState(false);
+  const [templateFilter, setTemplateFilter] = useState<'all' | 'visible' | 'hidden'>('all');
   const templateFileInputRef = useRef<HTMLInputElement>(null);
 
   // Template rename state
@@ -98,11 +102,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
       return;
     }
 
-    onAddTemplate(title, finalImage);
+    onAddTemplate(title, finalImage, addAsHidden);
     telegramHaptic('success');
     setTemplateTitle('');
     setTemplateImage(null);
     setTemplateUrlInput('');
+    setAddAsHidden(false);
     if (templateFileInputRef.current) templateFileInputRef.current.value = '';
   };
 
@@ -243,7 +248,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
       </div>
 
-      {/* Admin Feature 1: Управление шаблонами (Добавление и удаление) */}
+      {/* Admin Feature 1: Управление шаблонами (Добавление, удаление, переименование, скрытие) */}
       <div className="bg-slate-800 rounded-2xl p-4 border border-slate-700 space-y-4 shadow-md">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-sm text-amber-400 flex items-center gap-2">
@@ -262,7 +267,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <button
                 type="button"
                 onClick={() => setUploadMode('file')}
-                className={`px-2 py-0.5 rounded-md transition ${
+                className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
                   uploadMode === 'file'
                     ? 'bg-indigo-600 text-white font-bold'
                     : 'text-slate-400 hover:text-white'
@@ -273,7 +278,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <button
                 type="button"
                 onClick={() => setUploadMode('url')}
-                className={`px-2 py-0.5 rounded-md transition ${
+                className={`px-2 py-0.5 rounded-md transition cursor-pointer ${
                   uploadMode === 'url'
                     ? 'bg-indigo-600 text-white font-bold'
                     : 'text-slate-400 hover:text-white'
@@ -307,7 +312,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <button
                 type="button"
                 onClick={handleSaveTemplate}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-xs rounded-xl transition active:scale-95 shadow-md shadow-amber-500/20"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-xs rounded-xl transition active:scale-95 shadow-md shadow-amber-500/20 cursor-pointer"
               >
                 Добавить
               </button>
@@ -324,12 +329,23 @@ export const AdminView: React.FC<AdminViewProps> = ({
               <button
                 type="button"
                 onClick={handleSaveTemplate}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-xs rounded-xl transition active:scale-95"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold text-xs rounded-xl transition active:scale-95 cursor-pointer"
               >
                 Добавить
               </button>
             </div>
           )}
+
+          {/* Option to create as hidden right away */}
+          <label className="flex items-center gap-2 cursor-pointer pt-1 text-[11px] text-slate-300 select-none">
+            <input
+              type="checkbox"
+              checked={addAsHidden}
+              onChange={(e) => setAddAsHidden(e.target.checked)}
+              className="w-3.5 h-3.5 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-amber-500"
+            />
+            <span>Скрыть этот шаблон от остальных пользователей (черновик)</span>
+          </label>
 
           {templateImage && uploadMode === 'file' && (
             <div className="flex items-center gap-2 text-[11px] text-emerald-400 pt-1">
@@ -339,10 +355,46 @@ export const AdminView: React.FC<AdminViewProps> = ({
           )}
         </div>
 
-        {/* List & Delete Templates */}
-        <div className="space-y-2">
-          <div className="flex justify-between items-center text-[11px] font-semibold text-slate-400">
-            <span>Список шаблонов (можно удалить любой):</span>
+        {/* List, Filter, Visibility Toggle, Rename, and Delete Templates */}
+        <div className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-[11px]">
+            {/* Filter Tabs */}
+            <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-700/80">
+              <button
+                type="button"
+                onClick={() => setTemplateFilter('all')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                  templateFilter === 'all'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Все ({templates.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateFilter('visible')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                  templateFilter === 'visible'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Видные ({templates.filter((t) => !t.isHidden).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setTemplateFilter('hidden')}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold transition cursor-pointer ${
+                  templateFilter === 'hidden'
+                    ? 'bg-amber-500 text-slate-900 shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Скрытые ({templates.filter((t) => t.isHidden).length})
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => {
@@ -365,106 +417,177 @@ export const AdminView: React.FC<AdminViewProps> = ({
             </button>
           </div>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {templates.length === 0 ? (
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {templates.filter((t) => {
+              if (templateFilter === 'visible') return !t.isHidden;
+              if (templateFilter === 'hidden') return Boolean(t.isHidden);
+              return true;
+            }).length === 0 ? (
               <div className="text-center py-6 text-xs text-slate-500 bg-slate-900/50 rounded-xl">
-                Шаблонов нет. Добавьте новый или восстановите базовые.
+                {templateFilter === 'hidden'
+                  ? 'Скрытых шаблонов нет. Вы можете скрыть любой шаблон кнопкой "Скрыть".'
+                  : 'Шаблонов в этом списке нет.'}
               </div>
             ) : (
-              templates.map((t) => {
-                const isEditing = editingTemplateId === t.id;
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between bg-slate-900 border border-slate-700/70 hover:border-slate-600 rounded-xl p-2.5 transition"
-                  >
-                    <div className="flex items-center space-x-3 overflow-hidden flex-1 min-w-0">
-                      <img
-                        src={t.url}
-                        alt={t.title}
-                        className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-slate-950 border border-slate-800"
-                      />
-
-                      {isEditing ? (
-                        <div className="flex-1 flex items-center gap-1.5 mr-2">
-                          <input
-                            type="text"
-                            value={editingTitle}
-                            onChange={(e) => setEditingTitle(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveRename(t.id);
-                              if (e.key === 'Escape') setEditingTemplateId(null);
-                            }}
-                            className="w-full bg-slate-950 border border-indigo-500 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
-                            autoFocus
-                            placeholder="Новое название..."
+              templates
+                .filter((t) => {
+                  if (templateFilter === 'visible') return !t.isHidden;
+                  if (templateFilter === 'hidden') return Boolean(t.isHidden);
+                  return true;
+                })
+                .map((t) => {
+                  const isEditing = editingTemplateId === t.id;
+                  return (
+                    <div
+                      key={t.id}
+                      className={`flex items-center justify-between bg-slate-900 border rounded-xl p-2.5 transition gap-2 ${
+                        t.isHidden
+                          ? 'border-amber-500/40 bg-slate-900/90'
+                          : 'border-slate-700/70 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3 overflow-hidden flex-1 min-w-0">
+                        <div className="relative shrink-0">
+                          <img
+                            src={t.url}
+                            alt={t.title}
+                            className="w-11 h-11 rounded-lg object-contain bg-slate-950 border border-slate-800"
                           />
-                          <button
-                            type="button"
-                            onClick={() => handleSaveRename(t.id)}
-                            className="p-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition shrink-0"
-                            title="Сохранить"
-                          >
-                            <i className="fa-solid fa-check text-xs"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingTemplateId(null)}
-                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition shrink-0"
-                            title="Отмена"
-                          >
-                            <i className="fa-solid fa-xmark text-xs"></i>
-                          </button>
+                          {t.isHidden && (
+                            <div
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-[9px] shadow"
+                              title="Шаблон скрыт от пользователей"
+                            >
+                              <i className="fa-solid fa-eye-slash"></i>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="truncate flex-1 min-w-0 pr-1">
-                          <span className="text-xs text-slate-100 font-bold block truncate">
-                            {t.title}
-                          </span>
-                          <span className="text-[10px] text-slate-400">
-                            {t.isCustom ? 'Пользовательский' : 'Стандартный'} • Синхронизирован
-                          </span>
+
+                        {isEditing ? (
+                          <div className="flex-1 flex items-center gap-1.5 mr-2">
+                            <input
+                              type="text"
+                              value={editingTitle}
+                              onChange={(e) => setEditingTitle(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveRename(t.id);
+                                if (e.key === 'Escape') setEditingTemplateId(null);
+                              }}
+                              className="w-full bg-slate-950 border border-indigo-500 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
+                              autoFocus
+                              placeholder="Новое название..."
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveRename(t.id)}
+                              className="p-1.5 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition shrink-0"
+                              title="Сохранить"
+                            >
+                              <i className="fa-solid fa-check text-xs"></i>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingTemplateId(null)}
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition shrink-0"
+                              title="Отмена"
+                            >
+                              <i className="fa-solid fa-xmark text-xs"></i>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="truncate flex-1 min-w-0 pr-1">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span className="text-xs text-slate-100 font-bold truncate">
+                                {t.title}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              {t.isHidden ? (
+                                <span className="text-[10px] bg-amber-500/20 text-amber-300 font-bold px-1.5 py-0.2 rounded border border-amber-500/40 flex items-center gap-1">
+                                  <i className="fa-solid fa-eye-slash text-[8px]"></i>
+                                  Скрыт от остальных
+                                </span>
+                              ) : (
+                                <span className="text-[10px] bg-emerald-500/15 text-emerald-300 font-medium px-1.5 py-0.2 rounded border border-emerald-500/30 flex items-center gap-1">
+                                  <i className="fa-solid fa-eye text-[8px]"></i>
+                                  Виден всем
+                                </span>
+                              )}
+                              <span className="text-[10px] text-slate-400">
+                                • {t.isCustom ? 'Свой' : 'Базовый'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {!isEditing && (
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
+                          {/* Visibility Toggle Button */}
+                          {t.isHidden ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                telegramHaptic('light');
+                                onToggleTemplateVisibility(t.id, false);
+                              }}
+                              className="text-xs bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white px-2 py-1.5 rounded-lg border border-emerald-500/30 transition flex items-center gap-1 cursor-pointer"
+                              title="Сделать шаблон видимым для всех пользователей"
+                            >
+                              <i className="fa-solid fa-eye text-xs"></i>
+                              <span className="text-[10px] font-semibold hidden sm:inline">Показать</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                telegramHaptic('light');
+                                onToggleTemplateVisibility(t.id, true);
+                              }}
+                              className="text-xs bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-slate-900 px-2 py-1.5 rounded-lg border border-amber-500/30 transition flex items-center gap-1 cursor-pointer"
+                              title="Скрыть шаблон от остальных пользователей без удаления"
+                            >
+                              <i className="fa-solid fa-eye-slash text-xs"></i>
+                              <span className="text-[10px] font-semibold hidden sm:inline">Скрыть</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleStartRename(t)}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 p-1.5 rounded-lg hover:bg-indigo-500/10 transition cursor-pointer"
+                            title="Переименовать шаблон"
+                          >
+                            <i className="fa-solid fa-pen text-xs"></i>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfirmModal({
+                                isOpen: true,
+                                title: 'Удаление шаблона',
+                                message: `Удалить шаблон "${t.title}" со всех устройств?`,
+                                confirmText: 'Удалить',
+                                isDanger: true,
+                                onConfirm: () => {
+                                  onDeleteTemplate(t.id);
+                                  telegramHaptic('medium');
+                                  setConfirmModal(null);
+                                },
+                              });
+                            }}
+                            className="text-xs text-rose-400 hover:text-rose-300 p-1.5 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
+                            title="Удалить шаблон со всех устройств"
+                          >
+                            <i className="fa-solid fa-trash text-sm"></i>
+                          </button>
                         </div>
                       )}
                     </div>
-
-                    {!isEditing && (
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStartRename(t)}
-                          className="text-xs text-indigo-400 hover:text-indigo-300 p-2 rounded-lg hover:bg-indigo-500/10 transition cursor-pointer"
-                          title="Переименовать шаблон"
-                        >
-                          <i className="fa-solid fa-pen text-xs"></i>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setConfirmModal({
-                              isOpen: true,
-                              title: 'Удаление шаблона',
-                              message: `Удалить шаблон "${t.title}" со всех устройств?`,
-                              confirmText: 'Удалить',
-                              isDanger: true,
-                              onConfirm: () => {
-                                onDeleteTemplate(t.id);
-                                telegramHaptic('medium');
-                                setConfirmModal(null);
-                              },
-                            });
-                          }}
-                          className="text-xs text-rose-400 hover:text-rose-300 p-2 rounded-lg hover:bg-rose-500/10 transition cursor-pointer"
-                          title="Удалить шаблон со всех устройств"
-                        >
-                          <i className="fa-solid fa-trash text-sm"></i>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+                  );
+                })
             )}
           </div>
         </div>
