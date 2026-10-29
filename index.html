@@ -31,48 +31,99 @@
     }
   </style>
 
-  <!-- Telegram WebApp SDK (Non-blocking async loader) -->
+  <!-- Immediate Telegram WebApp Bridge: signals ready & expand to Telegram native client at 0ms -->
   <script>
     (function() {
-      // Early setup of Telegram WebApp if already injected by client
-      try {
-        if (window.Telegram && window.Telegram.WebApp) {
-          window.Telegram.WebApp.ready();
-          window.Telegram.WebApp.expand();
-          if (window.Telegram.WebApp.setHeaderColor) window.Telegram.WebApp.setHeaderColor('#1e293b');
-          if (window.Telegram.WebApp.setBackgroundColor) window.Telegram.WebApp.setBackgroundColor('#0f172a');
-        } else {
-          // Asynchronously attempt to load external script without blocking rendering
-          var tgScript = document.createElement('script');
-          tgScript.src = 'https://telegram.org/js/telegram-web-app.js';
-          tgScript.async = true;
-          tgScript.defer = true;
-          tgScript.onload = function() {
-            try {
-              if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.ready();
-                window.Telegram.WebApp.expand();
-              }
-            } catch (e) {}
-          };
-          tgScript.onerror = function() {
-            console.warn('[Telegram SDK] External script blocked or unreachable. Standalone mode active.');
-          };
-          document.head.appendChild(tgScript);
-        }
-      } catch (e) {
-        console.warn('[Telegram SDK] Early init warning:', e);
+      function postToTelegram(eventType, eventData) {
+        try {
+          var dataStr = typeof eventData === 'string' ? eventData : JSON.stringify(eventData || '');
+          var win = window;
+          if (win.TelegramWebviewProxy && win.TelegramWebviewProxy.postEvent) {
+            win.TelegramWebviewProxy.postEvent(eventType, dataStr);
+          } else if (win.webkit && win.webkit.messageHandlers && win.webkit.messageHandlers.webApp) {
+            win.webkit.messageHandlers.webApp.postMessage(JSON.stringify({ eventType: eventType, eventData: dataStr }));
+          } else if (win.parent && win.parent !== win) {
+            win.parent.postMessage(JSON.stringify({ eventType: eventType, eventData: dataStr }), '*');
+          }
+        } catch (e) {}
       }
 
-      // Universal uncaught error trap for older WebViews
+      // Signal Telegram client immediately so native loader dismisses without hanging
+      postToTelegram('web_app_ready', '');
+      postToTelegram('web_app_expand', '');
+      postToTelegram('web_app_set_header_color', { color_key: 'bg_color', color: '#1e293b' });
+      postToTelegram('web_app_set_background_color', { color: '#0f172a' });
+
+      // Repeat signals on early ticks to handle delayed WebView bridge attachment
+      setTimeout(function() { postToTelegram('web_app_ready', ''); postToTelegram('web_app_expand', ''); }, 150);
+      setTimeout(function() { postToTelegram('web_app_ready', ''); postToTelegram('web_app_expand', ''); }, 600);
+
+      // Parse initData from URL hash/query
+      var parsedUser = null;
+      try {
+        var raw = (window.location.hash || '').slice(1) || (window.location.search || '').slice(1);
+        var p = new URLSearchParams(raw);
+        var tgData = p.get('tgWebAppData') || p.get('initData');
+        if (tgData) {
+          var dp = new URLSearchParams(tgData);
+          var u = dp.get('user');
+          if (u) {
+            try { parsedUser = JSON.parse(decodeURIComponent(u)); } catch (e) {
+              try { parsedUser = JSON.parse(u); } catch (e2) {}
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Fallback Telegram object if official script is unreachable or slow
+      window.Telegram = window.Telegram || {};
+      if (!window.Telegram.WebApp) {
+        window.Telegram.WebApp = {
+          ready: function() { postToTelegram('web_app_ready', ''); },
+          expand: function() { postToTelegram('web_app_expand', ''); },
+          close: function() { postToTelegram('web_app_close', ''); },
+          enableClosingConfirmation: function() { postToTelegram('web_app_setup_closing_behavior', { need_confirmation: true }); },
+          setHeaderColor: function(c) { postToTelegram('web_app_set_header_color', { color_key: 'bg_color', color: c }); },
+          setBackgroundColor: function(c) { postToTelegram('web_app_set_background_color', { color: c }); },
+          BackButton: {
+            isVisible: false,
+            show: function() { postToTelegram('web_app_setup_back_button', { is_visible: true }); },
+            hide: function() { postToTelegram('web_app_setup_back_button', { is_visible: false }); },
+            onClick: function(cb) { window.addEventListener('telegram_back', cb); },
+            offClick: function(cb) { window.removeEventListener('telegram_back', cb); }
+          },
+          HapticFeedback: {
+            impactOccurred: function(s) { postToTelegram('web_app_trigger_haptic_feedback', { type: 'impact', impact_style: s }); },
+            notificationOccurred: function(t) { postToTelegram('web_app_trigger_haptic_feedback', { type: 'notification', notification_type: t }); },
+            selectionChanged: function() { postToTelegram('web_app_trigger_haptic_feedback', { type: 'selection_change' }); }
+          },
+          initDataUnsafe: { user: parsedUser },
+          colorScheme: 'dark',
+          themeParams: { bg_color: '#0f172a', text_color: '#ffffff' }
+        };
+      }
+
+      // Global error listener to display diagnosable feedback instead of infinite spin
       window.addEventListener('error', function(event) {
         console.error('[Global Error]', event.message, event.filename, event.lineno);
+        var statusEl = document.getElementById('loader-status');
+        var actionBox = document.getElementById('loader-action-box');
+        var errDetail = document.getElementById('loader-error-detail');
+        if (statusEl) statusEl.textContent = 'Ошибка загрузки страницы';
+        if (actionBox) actionBox.style.display = 'block';
+        if (errDetail && event.message) {
+          errDetail.textContent = event.message;
+          errDetail.style.display = 'block';
+        }
       });
       window.addEventListener('unhandledrejection', function(event) {
         console.error('[Global Unhandled Rejection]', event.reason);
       });
     })();
   </script>
+
+  <!-- Official Telegram WebApp SDK (async, non-blocking) -->
+  <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
   <div id="root">
@@ -87,25 +138,34 @@
       <div id="loader-status" style="font-size: 13px; color: #94a3b8; margin-top: 8px;">Загрузка мемов...</div>
       
       <!-- Subtle spinning indicator -->
-      <div style="margin-top: 18px; width: 22px; height: 22px; border: 2.5px solid rgba(245, 158, 11, 0.2); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      <div id="loader-spinner" style="margin-top: 18px; width: 22px; height: 22px; border: 2.5px solid rgba(245, 158, 11, 0.2); border-top-color: #f59e0b; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
 
-      <!-- Graceful emergency reload button shown only after 12s of no response -->
-      <div id="extended-fallback" style="display: none; margin-top: 24px;">
-        <button onclick="window.location.reload(true)" style="background: #334155; color: #cbd5e1; border: 1px solid #475569; border-radius: 12px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer;">
-          Обновить страницу
-        </button>
+      <!-- Action buttons shown on delay or error so user is never trapped in infinite loading -->
+      <div id="loader-action-box" style="display: none; margin-top: 20px;">
+        <div id="loader-error-detail" style="font-size: 11px; color: #f87171; margin-bottom: 12px; max-width: 280px; word-break: break-all; display: none;"></div>
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <button onclick="window.location.reload(true)" style="background: #4f46e5; color: white; border: none; border-radius: 12px; padding: 10px 18px; font-size: 12px; font-weight: 700; cursor: pointer;">
+            Обновить
+          </button>
+          <button onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}window.location.reload(true)" style="background: #334155; color: #cbd5e1; border: 1px solid #475569; border-radius: 12px; padding: 10px 14px; font-size: 12px; font-weight: 600; cursor: pointer;">
+            Очистить кэш
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <script>
-    // Only show fallback after 12s if React hasn't mounted
+    // After 5 seconds, provide recovery buttons if bundle is still downloading
     setTimeout(function() {
-      var fb = document.getElementById('extended-fallback');
-      if (fb && document.getElementById('preloader')) {
-        fb.style.display = 'block';
+      var p = document.getElementById('preloader');
+      var actionBox = document.getElementById('loader-action-box');
+      var statusEl = document.getElementById('loader-status');
+      if (p && actionBox) {
+        actionBox.style.display = 'block';
+        if (statusEl) statusEl.textContent = 'Инициализация мемов...';
       }
-    }, 12000);
+    }, 5000);
   </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>

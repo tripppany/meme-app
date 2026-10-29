@@ -315,8 +315,32 @@ async function startServer() {
   const distPath = path.join(__dirname, 'dist');
   const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
 
+  // Headers for Telegram Mini App iframe compatibility
+  app.use((req, res, next) => {
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', "frame-ancestors *;");
+    next();
+  });
+
   if (process.env.NODE_ENV === 'production' || hasDist) {
     console.log('[Server] Serving production bundle from dist/');
+
+    // Fallback: If client has cached dev index.html requesting /src/main.tsx, serve the bundled JS
+    app.get('/src/main.tsx', (req, res) => {
+      try {
+        const assetsDir = path.join(distPath, 'assets');
+        if (fs.existsSync(assetsDir)) {
+          const files = fs.readdirSync(assetsDir);
+          const jsEntry = files.find((f) => f.startsWith('index-') && f.endsWith('.js'));
+          if (jsEntry) {
+            res.setHeader('Content-Type', 'text/javascript');
+            return res.sendFile(path.join(assetsDir, jsEntry));
+          }
+        }
+      } catch {}
+      res.status(404).send('Not found');
+    });
+
     app.use(express.static(distPath, {
       setHeaders: (res, filePath) => {
         if (filePath.endsWith('index.html')) {
@@ -328,9 +352,15 @@ async function startServer() {
         }
       }
     }));
+
     app.use((req, res, next) => {
       if (req.originalUrl.startsWith('/api')) {
         return next();
+      }
+      // Never send index.html for static asset or file requests (prevents syntax/MIME-type errors)
+      const urlPath = req.path;
+      if (urlPath.includes('.') || urlPath.startsWith('/assets/') || urlPath.startsWith('/src/')) {
+        return res.status(404).type('text/plain').send('File not found');
       }
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
