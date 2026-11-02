@@ -99,9 +99,10 @@ export const App: React.FC = () => {
     }
   }, [addToast]);
 
-  // Initial load & Polling for real-time cross-device synchronization
+  // Continuous Real-Time Synchronization across ALL devices
   const isInitialMount = useRef(true);
   const isSyncing = useRef(false);
+  const lastModifiedRef = useRef<number>(0);
 
   const safeSync = useCallback(async (notify = false) => {
     if (isSyncing.current) return;
@@ -119,18 +120,38 @@ export const App: React.FC = () => {
       safeSync();
     }
 
-    // Gentle polling interval for cross-device updates (8 seconds avoids VPN congestion)
-    const pollInterval = setInterval(() => {
-      safeSync();
-    }, 8000);
+    // 1. Instant Real-Time Push Stream via Server-Sent Events (SSE)
+    const unsubscribeSSE = api.subscribeToEvents((data) => {
+      if (data?.lastModified && data.lastModified !== lastModifiedRef.current) {
+        lastModifiedRef.current = data.lastModified;
+        safeSync();
+      }
+    });
 
-    // Refresh when user focuses the tab/window
+    // 2. Continuous lightweight background heartbeat (every 2.5s)
+    const pollInterval = setInterval(async () => {
+      try {
+        const status = await api.getStatus();
+        if (status) {
+          setServerConnected(true);
+          if (status.lastModified && status.lastModified !== lastModifiedRef.current) {
+            lastModifiedRef.current = status.lastModified;
+            safeSync();
+          }
+        }
+      } catch {
+        // network hiccup, fallback safely
+      }
+    }, 2500);
+
+    // 3. Refresh immediately when window or Telegram app regains focus
     const handleFocus = () => {
       safeSync();
     };
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleFocus);
 
-    // BroadcastChannel for instant cross-tab sync
+    // 4. BroadcastChannel for instant cross-tab sync within the same browser
     const unsubscribeChannel = subscribeToSyncChannel(() => {
       setTemplates(loadAllTemplates());
       setMemesState(loadMemesState());
@@ -139,7 +160,9 @@ export const App: React.FC = () => {
 
     return () => {
       clearInterval(pollInterval);
+      unsubscribeSSE();
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleFocus);
       unsubscribeChannel();
     };
   }, [safeSync]);
@@ -345,6 +368,26 @@ export const App: React.FC = () => {
     }
 
     addToast('info', 'Мем отклонен');
+  };
+
+  // Delete meme from gallery and queue (Admin feature)
+  const handleDeleteMeme = async (id: string) => {
+    setMemesState((prev) => {
+      const next = {
+        pending: prev.pending.filter((m) => m.id !== id),
+        approved: prev.approved.filter((m) => m.id !== id),
+      };
+      saveMemesState(next);
+      return next;
+    });
+
+    try {
+      await api.deleteMeme(id);
+    } catch (e) {
+      console.warn('API delete meme error:', e);
+    }
+
+    addToast('info', 'Мем удален из галереи со всех устройств');
   };
 
   // Add custom template (Admin)
@@ -569,8 +612,10 @@ export const App: React.FC = () => {
         {currentTab === 'gallery' && (
           <GalleryView
             memes={memesState.approved}
+            isAdmin={isAdmin}
             onCreateMemeClick={() => setCurrentTab('editor')}
             onDownloadMeme={handleDownloadMeme}
+            onDeleteMeme={handleDeleteMeme}
           />
         )}
 
@@ -584,6 +629,7 @@ export const App: React.FC = () => {
             onApproveMeme={handleApproveMeme}
             onToggleAnonymity={handleToggleAnonymity}
             onRejectMeme={handleRejectMeme}
+            onDeleteMeme={handleDeleteMeme}
             onAddTemplate={handleAddTemplate}
             onToggleTemplateVisibility={handleToggleTemplateVisibility}
             onRenameTemplate={handleRenameTemplate}

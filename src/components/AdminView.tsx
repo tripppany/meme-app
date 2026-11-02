@@ -13,6 +13,7 @@ interface AdminViewProps {
   onApproveMeme: (id: string, isAnonymous?: boolean) => void;
   onToggleAnonymity: (id: string, explicitAnonymity?: boolean) => void;
   onRejectMeme: (id: string) => void;
+  onDeleteMeme: (id: string) => void;
   onAddTemplate: (title: string, dataUrl: string, isHidden?: boolean) => void;
   onToggleTemplateVisibility: (id: string, isHidden?: boolean) => void;
   onRenameTemplate: (id: string, newTitle: string) => void;
@@ -34,6 +35,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
   onApproveMeme,
   onToggleAnonymity,
   onRejectMeme,
+  onDeleteMeme,
   onAddTemplate,
   onToggleTemplateVisibility,
   onRenameTemplate,
@@ -76,6 +78,28 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
   // New admin ID state
   const [newAdminIdInput, setNewAdminIdInput] = useState('');
+
+  // Custom sync server URL state
+  const [customServerUrl, setCustomServerUrl] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('custom_server_url') || '';
+    }
+    return '';
+  });
+
+  const handleSaveServerUrl = () => {
+    const trimmed = customServerUrl.trim();
+    if (trimmed) {
+      localStorage.setItem('custom_server_url', trimmed);
+      setSyncFeedback({ type: 'success', text: `Сервер синхронизации сохранен: ${trimmed}` });
+    } else {
+      localStorage.removeItem('custom_server_url');
+      setSyncFeedback({ type: 'success', text: 'Используется автоматический адрес сервера' });
+    }
+    telegramHaptic('success');
+    setTimeout(() => setSyncFeedback(null), 3500);
+    onManualSyncRefresh();
+  };
 
   const handleTemplateFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -645,7 +669,33 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
 
         {showSyncDetails && (
-          <div className="space-y-3 pt-3 border-t border-slate-700 animate-in fade-in">
+          <div className="space-y-4 pt-3 border-t border-slate-700 animate-in fade-in">
+            {/* Real-time Server URL setting */}
+            <div className="space-y-1.5 bg-slate-900/60 p-3 rounded-xl border border-slate-700/60">
+              <label className="block text-[11px] font-semibold text-slate-300">
+                🌐 Адрес сервера непрерывной синхронизации (API URL):
+              </label>
+              <p className="text-[10px] text-slate-400">
+                Позволяет синхронизировать данные между Telegram на смартфонах, браузерами и GitHub Pages в реальном времени.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <input
+                  type="text"
+                  value={customServerUrl}
+                  onChange={(e) => setCustomServerUrl(e.target.value)}
+                  placeholder="Оставьте пустым для авто-определения (или введите https://...)"
+                  className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveServerUrl}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition active:scale-95 cursor-pointer shrink-0"
+                >
+                  Сохранить
+                </button>
+              </div>
+            </div>
+
             <label className="block text-[11px] font-semibold text-slate-400">
               Ручной перенос / Импорт данных с другого устройства:
             </label>
@@ -924,6 +974,29 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <span>Анонимно</span>
                     </button>
                   </div>
+
+                  {/* Delete Meme Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      telegramHaptic('medium');
+                      setConfirmModal({
+                        isOpen: true,
+                        title: 'Удалить мем из галереи?',
+                        message: `Удалить мем автора ${authorToDisplay}? Он будет удален со всех устройств.`,
+                        confirmText: 'Удалить',
+                        isDanger: true,
+                        onConfirm: () => {
+                          onDeleteMeme(m.id);
+                          setConfirmModal(null);
+                        },
+                      });
+                    }}
+                    className="p-2 bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white rounded-xl border border-rose-500/20 transition cursor-pointer"
+                    title="Удалить мем со всех устройств"
+                  >
+                    <i className="fa-solid fa-trash text-xs"></i>
+                  </button>
                 </div>
               );
             })}

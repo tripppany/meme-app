@@ -100,10 +100,32 @@ function loadPersistedData() {
   }
 }
 
+const sseClients = new Set<express.Response>();
+
+function broadcastEvent(type: string, data?: any) {
+  const payload = JSON.stringify({
+    type,
+    lastModified: serverState.lastModified,
+    templatesCount: serverState.templates.length,
+    memesCount: serverState.memes.approved.length,
+    pendingCount: serverState.memes.pending.length,
+    ...data,
+  });
+  const message = `data: ${payload}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(message);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+}
+
 function persistData() {
   try {
     serverState.lastModified = Date.now();
     fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2), 'utf-8');
+    broadcastEvent('sync_update');
   } catch (err) {
     console.error('[Server] Failed to persist data:', err);
   }
@@ -113,11 +135,39 @@ loadPersistedData();
 
 // ================= API ROUTES =================
 
+// Real-Time Server-Sent Events stream for continuous zero-latency sync
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // Immediate handshake with current state timestamp
+  res.write(`data: ${JSON.stringify({ type: 'connected', lastModified: serverState.lastModified })}\n\n`);
+
+  sseClients.add(res);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': ping\n\n');
+    } catch {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    }
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+  });
+});
+
 // Health and Sync Status
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
     deviceCountActive: true,
+    sseClientsCount: sseClients.size,
     lastModified: serverState.lastModified,
     templatesCount: serverState.templates.length,
     memesCount: serverState.memes.approved.length,
@@ -280,6 +330,26 @@ app.patch('/api/memes/:id/anonymity', (req, res) => {
   meme.author = meme.isAnonymous ? 'Аноним' : meme.realAuthor;
   persistData();
   res.json(meme);
+});
+
+// Delete meme (Admin feature)
+app.delete('/api/memes/:id', (req, res) => {
+  const { id } = req.params;
+  const initialApproved = serverState.memes.approved.length;
+  const initialPending = serverState.memes.pending.length;
+
+  serverState.memes.approved = serverState.memes.approved.filter((m) => m.id !== id);
+  serverState.memes.pending = serverState.memes.pending.filter((m) => m.id !== id);
+
+  if (
+    serverState.memes.approved.length === initialApproved &&
+    serverState.memes.pending.length === initialPending
+  ) {
+    return res.status(404).json({ error: 'Meme not found' });
+  }
+
+  persistData();
+  res.json({ success: true, deletedId: id });
 });
 
 // Admin IDs

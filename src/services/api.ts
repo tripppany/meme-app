@@ -10,15 +10,25 @@ export interface SyncPayload {
   lastModified?: number;
 }
 
+export function getApiBaseUrl(): string {
+  if (typeof window === 'undefined') return '';
+  const stored = localStorage.getItem('custom_server_url');
+  if (stored && stored.trim()) {
+    return stored.trim().replace(/\/+$/, '');
+  }
+  return '';
+}
+
 /**
  * Resilient fetch with a 10s default timeout and automatic single retry for transient VPN dropouts.
  */
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 10000, retries = 1): Promise<Response> {
+  const fullUrl = url.startsWith('http') ? url : `${getApiBaseUrl()}${url}`;
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(fullUrl, {
         ...options,
         signal: controller.signal,
       });
@@ -37,9 +47,55 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 }
 
 export const api = {
-  async getStatus(): Promise<{ status: string; templatesCount: number; memesCount: number; pendingCount: number } | null> {
+  subscribeToEvents(onEvent: (data: any) => void): () => void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      return () => {};
+    }
+    const baseUrl = getApiBaseUrl();
+    const eventUrl = `${baseUrl}/api/events`;
+    let es: EventSource | null = null;
+    let isClosed = false;
+
+    function connect() {
+      if (isClosed) return;
+      try {
+        es = new EventSource(eventUrl);
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            onEvent(data);
+          } catch {}
+        };
+        es.onerror = () => {
+          if (es) {
+            es.close();
+            es = null;
+          }
+          if (!isClosed) {
+            setTimeout(connect, 3000);
+          }
+        };
+      } catch {
+        if (!isClosed) {
+          setTimeout(connect, 5000);
+        }
+      }
+    }
+
+    connect();
+
+    return () => {
+      isClosed = true;
+      if (es) {
+        es.close();
+        es = null;
+      }
+    };
+  },
+
+  async getStatus(): Promise<{ status: string; lastModified?: number; templatesCount: number; memesCount: number; pendingCount: number } | null> {
     try {
-      const res = await fetchWithTimeout('/api/status', {}, 8000);
+      const res = await fetchWithTimeout('/api/status', {}, 5000);
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -171,6 +227,17 @@ export const api = {
       return await res.json();
     } catch {
       return null;
+    }
+  },
+
+  async deleteMeme(id: string): Promise<boolean> {
+    try {
+      const res = await fetchWithTimeout(`/api/memes/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }, 10000);
+      return res.ok;
+    } catch {
+      return false;
     }
   },
 
