@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MemeItem, MemeTemplate, TelegramUser } from './types/meme';
-import { DEFAULT_TEMPLATES, PRIMARY_ADMIN_IDS } from './constants/templates';
+import { DEFAULT_TEMPLATES, PRIMARY_ADMIN_IDS, INITIAL_APPROVED_MEMES } from './constants/templates';
 import {
   loadMemesState,
   saveMemesState,
@@ -16,6 +16,20 @@ import {
   MemesState,
 } from './services/storage';
 import { api } from './services/api';
+import {
+  testConnection,
+  subscribeToFirestoreTemplates,
+  subscribeToFirestorePendingMemes,
+  subscribeToFirestoreApprovedMemes,
+  seedFirestoreIfEmpty,
+  addFirestoreTemplate,
+  updateFirestoreTemplate,
+  deleteFirestoreTemplate,
+  submitFirestoreMeme,
+  approveFirestoreMeme,
+  rejectFirestoreMeme,
+  deleteFirestoreApprovedMeme,
+} from './services/firebaseSync';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { HomeView } from './components/HomeView';
@@ -118,9 +132,45 @@ export const App: React.FC = () => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       safeSync();
+      // Test Firestore connection & seed templates/memes if first boot
+      testConnection().catch(() => {});
+      seedFirestoreIfEmpty(DEFAULT_TEMPLATES, INITIAL_APPROVED_MEMES).catch(() => {});
     }
 
-    // 1. Instant Real-Time Push Stream via Server-Sent Events (SSE)
+    // 1. Direct Cloud Firestore Real-Time Snapshot Sync (Works 24/7 on GitHub Pages & Telegram!)
+    let unsubFirestoreTemplates: (() => void) | null = null;
+    let unsubFirestorePending: (() => void) | null = null;
+    let unsubFirestoreApproved: (() => void) | null = null;
+
+    try {
+      unsubFirestoreTemplates = subscribeToFirestoreTemplates((cloudTemplates) => {
+        if (cloudTemplates && cloudTemplates.length > 0) {
+          setTemplates(cloudTemplates);
+          saveAllTemplates(cloudTemplates);
+          setServerConnected(true);
+        }
+      });
+
+      unsubFirestorePending = subscribeToFirestorePendingMemes((cloudPending) => {
+        setMemesState((prev) => {
+          const next = { ...prev, pending: cloudPending };
+          saveMemesState(next);
+          return next;
+        });
+      });
+
+      unsubFirestoreApproved = subscribeToFirestoreApprovedMemes((cloudApproved) => {
+        setMemesState((prev) => {
+          const next = { ...prev, approved: cloudApproved };
+          saveMemesState(next);
+          return next;
+        });
+      });
+    } catch (e) {
+      console.warn('Firestore subscription error:', e);
+    }
+
+    // 2. Instant Real-Time Push Stream via Server-Sent Events (SSE) (for Express server mode)
     const unsubscribeSSE = api.subscribeToEvents((data) => {
       if (data?.lastModified && data.lastModified !== lastModifiedRef.current) {
         lastModifiedRef.current = data.lastModified;
@@ -128,7 +178,7 @@ export const App: React.FC = () => {
       }
     });
 
-    // 2. Continuous lightweight background heartbeat (every 2.5s)
+    // 3. Continuous background heartbeat (every 3s)
     const pollInterval = setInterval(async () => {
       try {
         const status = await api.getStatus();
@@ -142,16 +192,16 @@ export const App: React.FC = () => {
       } catch {
         // network hiccup, fallback safely
       }
-    }, 2500);
+    }, 3000);
 
-    // 3. Refresh immediately when window or Telegram app regains focus
+    // 4. Refresh immediately when window or Telegram app regains focus
     const handleFocus = () => {
       safeSync();
     };
     window.addEventListener('focus', handleFocus);
     window.addEventListener('online', handleFocus);
 
-    // 4. BroadcastChannel for instant cross-tab sync within the same browser
+    // 5. BroadcastChannel for instant cross-tab sync within the same browser
     const unsubscribeChannel = subscribeToSyncChannel(() => {
       setTemplates(loadAllTemplates());
       setMemesState(loadMemesState());
@@ -160,6 +210,9 @@ export const App: React.FC = () => {
 
     return () => {
       clearInterval(pollInterval);
+      if (unsubFirestoreTemplates) unsubFirestoreTemplates();
+      if (unsubFirestorePending) unsubFirestorePending();
+      if (unsubFirestoreApproved) unsubFirestoreApproved();
       unsubscribeSSE();
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('online', handleFocus);
@@ -251,7 +304,7 @@ export const App: React.FC = () => {
 
     // Local optimistic update
     const newMeme: MemeItem = {
-      id: 'meme-' + Date.now(),
+      id: 'meme-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
       dataUrl,
       author: authorTag,
       realAuthor: authorTag,
@@ -266,11 +319,16 @@ export const App: React.FC = () => {
       return next;
     });
 
-    // Send to server
+    // 1. Direct Cloud Firestore Push (Instant cross-device sync for Telegram & GitHub Pages)
+    submitFirestoreMeme(newMeme).catch((e) => {
+      console.warn('Firestore submit error:', e);
+    });
+
+    // 2. Express Backend API call (if running)
     try {
       await api.submitMeme(dataUrl, authorTag);
     } catch (e) {
-      console.warn('Server offline, saved locally:', e);
+      console.warn('Server offline, saved locally/cloud:', e);
     }
 
     addToast('success', 'Мем отправлен на модерацию!');
@@ -279,6 +337,7 @@ export const App: React.FC = () => {
 
   // Approve meme (with optional anonymity)
   const handleApproveMeme = async (id: string, isAnonymous = false) => {
+    let approvedMemeItem: MemeItem | null = null;
     setMemesState((prev) => {
       const target = prev.pending.find((m) => m.id === id);
       if (!target) return prev;
@@ -290,6 +349,7 @@ export const App: React.FC = () => {
         author: isAnonymous ? 'Аноним' : realAuthor,
         status: 'approved',
       };
+      approvedMemeItem = approvedMeme;
       const next = {
         pending: prev.pending.filter((m) => m.id !== id),
         approved: [approvedMeme, ...prev.approved],
@@ -297,6 +357,13 @@ export const App: React.FC = () => {
       saveMemesState(next);
       return next;
     });
+
+    // Cloud Firestore Sync
+    if (approvedMemeItem) {
+      approveFirestoreMeme(approvedMemeItem).catch((e) => {
+        console.warn('Firestore approve error:', e);
+      });
+    }
 
     try {
       await api.updateMemeStatus(id, 'approved', isAnonymous);
@@ -336,6 +403,11 @@ export const App: React.FC = () => {
       return next;
     });
 
+    // Cloud Firestore Sync
+    approveFirestoreMeme(updatedMeme).catch((e) => {
+      console.warn('Firestore anonymity sync error:', e);
+    });
+
     try {
       await api.toggleMemeAnonymity(id, newAnonState);
     } catch (e) {
@@ -361,6 +433,11 @@ export const App: React.FC = () => {
       return next;
     });
 
+    // Cloud Firestore Sync
+    rejectFirestoreMeme(id).catch((e) => {
+      console.warn('Firestore reject error:', e);
+    });
+
     try {
       await api.updateMemeStatus(id, 'rejected');
     } catch (e) {
@@ -380,6 +457,10 @@ export const App: React.FC = () => {
       saveMemesState(next);
       return next;
     });
+
+    // Cloud Firestore Sync: delete from approved and pending
+    deleteFirestoreApprovedMeme(id).catch(() => {});
+    rejectFirestoreMeme(id).catch(() => {});
 
     try {
       await api.deleteMeme(id);
@@ -405,6 +486,11 @@ export const App: React.FC = () => {
       const next = [localTemplate, ...prev];
       saveAllTemplates(next);
       return next;
+    });
+
+    // Cloud Firestore Sync (Instant template availability across all devices)
+    addFirestoreTemplate(localTemplate).catch((e) => {
+      console.warn('Firestore add template error:', e);
     });
 
     try {
@@ -440,6 +526,11 @@ export const App: React.FC = () => {
       return next;
     });
 
+    // Cloud Firestore Sync
+    updateFirestoreTemplate(id, { isHidden: nextHidden }).catch((e) => {
+      console.warn('Firestore update visibility error:', e);
+    });
+
     try {
       await api.toggleTemplateVisibility(id, nextHidden);
     } catch (e) {
@@ -462,6 +553,11 @@ export const App: React.FC = () => {
       return next;
     });
 
+    // Cloud Firestore Sync
+    updateFirestoreTemplate(id, { title: newTitle }).catch((e) => {
+      console.warn('Firestore rename error:', e);
+    });
+
     try {
       await api.renameTemplate(id, newTitle);
     } catch (e) {
@@ -477,6 +573,11 @@ export const App: React.FC = () => {
       const next = prev.filter((t) => t.id !== id);
       saveAllTemplates(next);
       return next;
+    });
+
+    // Cloud Firestore Sync
+    deleteFirestoreTemplate(id).catch((e) => {
+      console.warn('Firestore delete template error:', e);
     });
 
     try {

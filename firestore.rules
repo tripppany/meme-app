@@ -1,0 +1,49 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTemplate(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.url is string && data.url.size() <= 2000000;
+    }
+
+    function isValidMeme(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.dataUrl is string && data.dataUrl.size() <= 1000000
+        && data.author is string && data.author.size() <= 100
+        && (data.status == 'pending' || data.status == 'approved');
+    }
+
+    // Templates collection: readable by all users, writable for custom templates & updates
+    match /templates/{templateId} {
+      allow read: if true;
+      allow create, update: if isValidId(templateId) && isValidTemplate(request.resource.data);
+      allow delete: if isValidId(templateId);
+    }
+
+    // Pending memes for admin moderation
+    match /pending_memes/{memeId} {
+      allow read: if true;
+      allow create, update: if isValidId(memeId) && isValidMeme(request.resource.data);
+      allow delete: if isValidId(memeId);
+    }
+
+    // Approved memes shown in public gallery
+    match /approved_memes/{memeId} {
+      allow read: if true;
+      allow create, update: if isValidId(memeId) && isValidMeme(request.resource.data);
+      allow delete: if isValidId(memeId);
+    }
+
+    // Fallback: deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

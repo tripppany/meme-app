@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "template": {
+      "title": "MemeTemplate",
+      "description": "A meme background template that users can choose from to create memes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 200 },
+        "url": { "type": "string", "maxLength": 2000000 },
+        "isCustom": { "type": "boolean" },
+        "isHidden": { "type": "boolean" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "title", "url"]
+    },
+    "meme": {
+      "title": "MemeItem",
+      "description": "A generated meme pending moderation or approved into public gallery",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "dataUrl": { "type": "string", "maxLength": 1000000 },
+        "author": { "type": "string", "maxLength": 100 },
+        "realAuthor": { "type": "string", "maxLength": 100 },
+        "isAnonymous": { "type": "boolean" },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "approved"] }
+      },
+      "required": ["id", "dataUrl", "author", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "/templates/{templateId}": {
+      "schema": "template",
+      "description": "Templates available to all users (admins can hide or delete)"
+    },
+    "/pending_memes/{memeId}": {
+      "schema": "meme",
+      "description": "Memes sent by users for admin moderation"
+    },
+    "/approved_memes/{memeId}": {
+      "schema": "meme",
+      "description": "Public memes shown in the community gallery"
+    }
+  }
+}
