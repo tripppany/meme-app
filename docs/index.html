@@ -169,29 +169,19 @@
       }
     }, 4000);
 
-    // GitHub Pages Static Fallback:
-    // If running directly from GitHub repository root where /src/main.tsx cannot be parsed,
-    // dynamically load pre-compiled production bundle!
+    // GitHub Pages Static Routing:
+    // If opened from GitHub repository root on github.io, automatically route to the pre-built /docs/ directory
     (function() {
-      var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
-      if (isGitHubPages) {
-        setTimeout(function() {
-          if (!window.__APP_LOADED__ && document.getElementById('preloader')) {
-            console.log('[GitHub Pages] Loading pre-compiled bundle from ./dist/assets/app.js');
-            var s = document.createElement('script');
-            s.type = 'module';
-            s.crossOrigin = 'anonymous';
-            s.src = './dist/assets/app.js';
-            document.body.appendChild(s);
-
-            var c = document.createElement('link');
-            c.rel = 'stylesheet';
-            c.crossOrigin = 'anonymous';
-            c.href = './dist/assets/app.css';
-            document.head.appendChild(c);
+      try {
+        var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
+        if (isGitHubPages) {
+          var p = window.location.pathname;
+          if (!p.includes('/docs')) {
+            var target = p.replace(/\/?$/, '/docs/') + window.location.search + window.location.hash;
+            window.location.replace(target);
           }
-        }, 500);
-      }
+        }
+      } catch (e) {}
     })();
   </script>
 </body>
