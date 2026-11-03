@@ -52,6 +52,10 @@ export const api = {
       return () => {};
     }
     const baseUrl = getApiBaseUrl();
+    // GitHub Pages has no Express backend by default; avoid 404 reconnect loops
+    if (!baseUrl && window.location.hostname.includes('github.io')) {
+      return () => {};
+    }
     const eventUrl = `${baseUrl}/api/events`;
     let es: EventSource | null = null;
     let isClosed = false;
@@ -94,6 +98,10 @@ export const api = {
   },
 
   async getStatus(): Promise<{ status: string; lastModified?: number; templatesCount: number; memesCount: number; pendingCount: number } | null> {
+    const baseUrl = getApiBaseUrl();
+    if (!baseUrl && typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
+      return null;
+    }
     try {
       const res = await fetchWithTimeout('/api/status', {}, 5000);
       if (!res.ok) return null;

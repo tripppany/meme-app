@@ -104,7 +104,11 @@ export function subscribeToFirestoreTemplates(onUpdate: (templates: MemeTemplate
       onUpdate(templates);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, 'templates');
+      try {
+        handleFirestoreError(error, OperationType.GET, 'templates');
+      } catch (err) {
+        console.warn('Firestore templates listener error (using local fallback):', err);
+      }
     }
   );
 }
@@ -134,7 +138,11 @@ export function subscribeToFirestorePendingMemes(onUpdate: (memes: MemeItem[]) =
       onUpdate(memes);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, 'pending_memes');
+      try {
+        handleFirestoreError(error, OperationType.GET, 'pending_memes');
+      } catch (err) {
+        console.warn('Firestore pending memes listener error (using local fallback):', err);
+      }
     }
   );
 }
@@ -164,7 +172,11 @@ export function subscribeToFirestoreApprovedMemes(onUpdate: (memes: MemeItem[]) 
       onUpdate(memes);
     },
     (error) => {
-      handleFirestoreError(error, OperationType.GET, 'approved_memes');
+      try {
+        handleFirestoreError(error, OperationType.GET, 'approved_memes');
+      } catch (err) {
+        console.warn('Firestore approved memes listener error (using local fallback):', err);
+      }
     }
   );
 }

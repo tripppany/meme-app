@@ -166,21 +166,6 @@
         if (statusEl) statusEl.textContent = 'Инициализация мемов...';
       }
     }, 4000);
-
-    // GitHub Pages Static Routing:
-    // If opened from GitHub repository root on github.io, automatically route to the pre-built /docs/ directory
-    (function() {
-      try {
-        var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
-        if (isGitHubPages) {
-          var p = window.location.pathname;
-          if (!p.includes('/docs')) {
-            var target = p.replace(/\/?$/, '/docs/') + window.location.search + window.location.hash;
-            window.location.replace(target);
-          }
-        }
-      } catch (e) {}
-    })();
   </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
