@@ -1,4 +1,4 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
   getFirestore,
   doc,
@@ -58,16 +58,34 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-// Initialize Firebase App
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// Resilient singleton lazy initializer that never crashes top-level bundle evaluation
+let cachedApp: FirebaseApp | null = null;
+let cachedDb: Firestore | null = null;
+let initFailed = false;
 
-// Initialize Firestore with configured databaseId
-export const db: Firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export function getDb(): Firestore | null {
+  if (cachedDb) return cachedDb;
+  if (initFailed) return null;
+
+  try {
+    if (typeof window === 'undefined') return null;
+    cachedApp = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    cachedDb = getFirestore(cachedApp, firebaseConfig.firestoreDatabaseId);
+    return cachedDb;
+  } catch (err) {
+    initFailed = true;
+    console.warn('[Firebase] Safe fallback active: Cloud database initialization deferred or restricted in this environment:', err);
+    return null;
+  }
+}
 
 /**
  * Validate connection to Firestore
  */
 export async function testConnection(): Promise<boolean> {
+  const db = getDb();
+  if (!db) return false;
+
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
@@ -83,108 +101,134 @@ export async function testConnection(): Promise<boolean> {
  * Real-time listener for Meme Templates
  */
 export function subscribeToFirestoreTemplates(onUpdate: (templates: MemeTemplate[]) => void): () => void {
-  const colRef = collection(db, 'templates');
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      const templates: MemeTemplate[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as MemeTemplate;
-        templates.push({
-          id: docSnap.id,
-          title: data.title,
-          url: data.url,
-          isCustom: data.isCustom ?? false,
-          isHidden: data.isHidden ?? false,
-          createdAt: data.createdAt ?? Date.now(),
+  const db = getDb();
+  if (!db) return () => {};
+
+  try {
+    const colRef = collection(db, 'templates');
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const templates: MemeTemplate[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as MemeTemplate;
+          templates.push({
+            id: docSnap.id,
+            title: data.title,
+            url: data.url,
+            isCustom: data.isCustom ?? false,
+            isHidden: data.isHidden ?? false,
+            createdAt: data.createdAt ?? Date.now(),
+          });
         });
-      });
-      // Sort templates: custom ones first or by createdAt
-      templates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      onUpdate(templates);
-    },
-    (error) => {
-      try {
-        handleFirestoreError(error, OperationType.GET, 'templates');
-      } catch (err) {
-        console.warn('Firestore templates listener error (using local fallback):', err);
+        templates.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        onUpdate(templates);
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, 'templates');
+        } catch (err) {
+          console.warn('Firestore templates listener notice (using local data):', err);
+        }
       }
-    }
-  );
+    );
+  } catch (err) {
+    console.warn('Firestore subscribeToFirestoreTemplates skipped:', err);
+    return () => {};
+  }
 }
 
 /**
  * Real-time listener for Pending Memes (for admin moderation)
  */
 export function subscribeToFirestorePendingMemes(onUpdate: (memes: MemeItem[]) => void): () => void {
-  const colRef = collection(db, 'pending_memes');
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      const memes: MemeItem[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as MemeItem;
-        memes.push({
-          id: docSnap.id,
-          dataUrl: data.dataUrl,
-          author: data.author,
-          realAuthor: data.realAuthor,
-          isAnonymous: data.isAnonymous ?? false,
-          timestamp: data.timestamp ?? Date.now(),
-          status: 'pending',
+  const db = getDb();
+  if (!db) return () => {};
+
+  try {
+    const colRef = collection(db, 'pending_memes');
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const memes: MemeItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as MemeItem;
+          memes.push({
+            id: docSnap.id,
+            dataUrl: data.dataUrl,
+            author: data.author,
+            realAuthor: data.realAuthor,
+            isAnonymous: data.isAnonymous ?? false,
+            timestamp: data.timestamp ?? Date.now(),
+            status: 'pending',
+          });
         });
-      });
-      memes.sort((a, b) => b.timestamp - a.timestamp);
-      onUpdate(memes);
-    },
-    (error) => {
-      try {
-        handleFirestoreError(error, OperationType.GET, 'pending_memes');
-      } catch (err) {
-        console.warn('Firestore pending memes listener error (using local fallback):', err);
+        memes.sort((a, b) => b.timestamp - a.timestamp);
+        onUpdate(memes);
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, 'pending_memes');
+        } catch (err) {
+          console.warn('Firestore pending memes listener notice (using local data):', err);
+        }
       }
-    }
-  );
+    );
+  } catch (err) {
+    console.warn('Firestore subscribeToFirestorePendingMemes skipped:', err);
+    return () => {};
+  }
 }
 
 /**
  * Real-time listener for Approved Memes (community gallery)
  */
 export function subscribeToFirestoreApprovedMemes(onUpdate: (memes: MemeItem[]) => void): () => void {
-  const colRef = collection(db, 'approved_memes');
-  return onSnapshot(
-    colRef,
-    (snapshot) => {
-      const memes: MemeItem[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data() as MemeItem;
-        memes.push({
-          id: docSnap.id,
-          dataUrl: data.dataUrl,
-          author: data.author,
-          realAuthor: data.realAuthor,
-          isAnonymous: data.isAnonymous ?? false,
-          timestamp: data.timestamp ?? Date.now(),
-          status: 'approved',
+  const db = getDb();
+  if (!db) return () => {};
+
+  try {
+    const colRef = collection(db, 'approved_memes');
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const memes: MemeItem[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as MemeItem;
+          memes.push({
+            id: docSnap.id,
+            dataUrl: data.dataUrl,
+            author: data.author,
+            realAuthor: data.realAuthor,
+            isAnonymous: data.isAnonymous ?? false,
+            timestamp: data.timestamp ?? Date.now(),
+            status: 'approved',
+          });
         });
-      });
-      memes.sort((a, b) => b.timestamp - a.timestamp);
-      onUpdate(memes);
-    },
-    (error) => {
-      try {
-        handleFirestoreError(error, OperationType.GET, 'approved_memes');
-      } catch (err) {
-        console.warn('Firestore approved memes listener error (using local fallback):', err);
+        memes.sort((a, b) => b.timestamp - a.timestamp);
+        onUpdate(memes);
+      },
+      (error) => {
+        try {
+          handleFirestoreError(error, OperationType.GET, 'approved_memes');
+        } catch (err) {
+          console.warn('Firestore approved memes listener notice (using local data):', err);
+        }
       }
-    }
-  );
+    );
+  } catch (err) {
+    console.warn('Firestore subscribeToFirestoreApprovedMemes skipped:', err);
+    return () => {};
+  }
 }
 
 /**
  * Seed initial templates and memes if Firestore is completely empty
  */
 export async function seedFirestoreIfEmpty(defaultTemplates: MemeTemplate[], initialMemes: MemeItem[]): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   try {
     const snap = await getDocs(collection(db, 'templates'));
     if (snap.empty) {
@@ -227,6 +271,9 @@ export async function seedFirestoreIfEmpty(defaultTemplates: MemeTemplate[], ini
  * Template Cloud Mutations
  */
 export async function addFirestoreTemplate(template: MemeTemplate): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `templates/${template.id}`;
   try {
     await setDoc(doc(db, 'templates', template.id), {
@@ -238,25 +285,43 @@ export async function addFirestoreTemplate(template: MemeTemplate): Promise<void
       createdAt: template.createdAt || Date.now(),
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch (err) {
+      console.warn('Firestore add template warning:', err);
+    }
   }
 }
 
 export async function updateFirestoreTemplate(id: string, updates: Partial<MemeTemplate>): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `templates/${id}`;
   try {
     await updateDoc(doc(db, 'templates', id), updates);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, path);
+    try {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    } catch (err) {
+      console.warn('Firestore update template warning:', err);
+    }
   }
 }
 
 export async function deleteFirestoreTemplate(id: string): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `templates/${id}`;
   try {
     await deleteDoc(doc(db, 'templates', id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    try {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch (err) {
+      console.warn('Firestore delete template warning:', err);
+    }
   }
 }
 
@@ -264,6 +329,9 @@ export async function deleteFirestoreTemplate(id: string): Promise<void> {
  * Meme Cloud Mutations
  */
 export async function submitFirestoreMeme(meme: MemeItem): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `pending_memes/${meme.id}`;
   try {
     await setDoc(doc(db, 'pending_memes', meme.id), {
@@ -276,11 +344,18 @@ export async function submitFirestoreMeme(meme: MemeItem): Promise<void> {
       status: 'pending',
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, path);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    } catch (err) {
+      console.warn('Firestore submit meme warning:', err);
+    }
   }
 }
 
 export async function approveFirestoreMeme(meme: MemeItem): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const approvedPath = `approved_memes/${meme.id}`;
   const pendingPath = `pending_memes/${meme.id}`;
   try {
@@ -293,27 +368,44 @@ export async function approveFirestoreMeme(meme: MemeItem): Promise<void> {
       timestamp: meme.timestamp,
       status: 'approved',
     });
-    // Remove from pending
     await deleteDoc(doc(db, 'pending_memes', meme.id));
   } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, approvedPath || pendingPath);
+    try {
+      handleFirestoreError(error, OperationType.WRITE, approvedPath || pendingPath);
+    } catch (err) {
+      console.warn('Firestore approve meme warning:', err);
+    }
   }
 }
 
 export async function rejectFirestoreMeme(memeId: string): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `pending_memes/${memeId}`;
   try {
     await deleteDoc(doc(db, 'pending_memes', memeId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    try {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch (err) {
+      console.warn('Firestore reject meme warning:', err);
+    }
   }
 }
 
 export async function deleteFirestoreApprovedMeme(memeId: string): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+
   const path = `approved_memes/${memeId}`;
   try {
     await deleteDoc(doc(db, 'approved_memes', memeId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    try {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch (err) {
+      console.warn('Firestore delete approved meme warning:', err);
+    }
   }
 }

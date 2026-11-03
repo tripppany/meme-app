@@ -31,6 +31,18 @@
     }
   </style>
 
+  <!-- Ensure trailing slash on GitHub Pages repository URLs so relative asset paths (./assets/...) resolve reliably -->
+  <script>
+    (function() {
+      if (window.location.hostname.endsWith('github.io')) {
+        var p = window.location.pathname;
+        if (p && !p.endsWith('/') && !p.includes('.')) {
+          window.location.replace(window.location.protocol + '//' + window.location.host + p + '/' + window.location.search + window.location.hash);
+        }
+      }
+    })();
+  </script>
+
   <!-- Immediate Telegram WebApp Bridge: signals ready & expand to Telegram native client at 0ms -->
   <script>
     (function() {

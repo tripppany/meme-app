@@ -31,6 +31,18 @@
     }
   </style>
 
+  <!-- Ensure trailing slash on GitHub Pages repository URLs so relative asset paths (./assets/...) resolve reliably -->
+  <script>
+    (function() {
+      if (window.location.hostname.endsWith('github.io')) {
+        var p = window.location.pathname;
+        if (p && !p.endsWith('/') && !p.includes('.')) {
+          window.location.replace(window.location.protocol + '//' + window.location.host + p + '/' + window.location.search + window.location.hash);
+        }
+      }
+    })();
+  </script>
+
   <!-- Immediate Telegram WebApp Bridge: signals ready & expand to Telegram native client at 0ms -->
   <script>
     (function() {
@@ -124,8 +136,10 @@
 
   <!-- Official Telegram WebApp SDK (async, non-blocking) -->
   <script async src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script type="module" crossorigin src="./assets/index.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index.css">
+  <script type="module" crossorigin src="./assets/index-BDZ1LOSh.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/vendor-CPC14Yq_.js">
+  <link rel="modulepreload" crossorigin href="./assets/firebase-Do3R9NAI.js">
+  <link rel="stylesheet" crossorigin href="./assets/index-uaQwh9kZ.css">
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
   <div id="root">
